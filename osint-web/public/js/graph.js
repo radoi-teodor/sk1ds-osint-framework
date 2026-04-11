@@ -185,7 +185,28 @@
     let html = `<div class="ctx-header">${esc(type)} · ${esc(short)}</div>`;
 
     if (isTemplate) {
-      html += `<div class="ctx-item danger" onclick="window.graphDeleteNode('${nodeId}')">Delete step</div>`;
+      // Only template:input and template:transform can have next steps chained.
+      const compatible = compatibleNextSteps(n);
+      if (compatible.length === 0) {
+        html += `<div class="ctx-item" style="color:var(--text-dim)">No compatible next steps</div>`;
+      } else {
+        const byCat = {};
+        for (const t of compatible) {
+          const cat = t.category || 'other';
+          (byCat[cat] ||= []).push(t);
+        }
+        const cats = Object.keys(byCat).sort();
+        for (const cat of cats) {
+          html += `<div class="ctx-cat">${esc(cat)}</div>`;
+          for (const t of byCat[cat]) {
+            const desc = (t.description || '').replace(/"/g, '&quot;');
+            const needsKey = (t.required_api_keys || []).length > 0 ? ' 🔑' : '';
+            html += `<div class="ctx-item" title="${desc}" onclick="window.templateAddNextStep('${nodeId}','${esc(t.name)}')">+ ${esc(t.display_name || t.name)}${needsKey}</div>`;
+          }
+        }
+      }
+      html += `<div class="ctx-cat">node</div>`;
+      html += `<div class="ctx-item danger" onclick="window.graphDeleteNode('${nodeId}')">delete step</div>`;
       return html;
     }
 
@@ -420,7 +441,40 @@
     });
   };
 
-  // ---------- template mode: connect-edge ----------
+  // ---------- template mode ----------
+  function compatibleNextSteps(fromNode) {
+    const type = fromNode.data('entity_type');
+    // template:input accepts anything downstream
+    if (type === 'template:input') return cfg.transforms || [];
+    if (type !== 'template:transform') return [];
+    const fromName = fromNode.data('value');
+    const fromSpec = (cfg.transforms || []).find((t) => t.name === fromName);
+    if (!fromSpec) return cfg.transforms || [];
+    const outs = fromSpec.output_types || [];
+    return (cfg.transforms || []).filter((t) => {
+      const ins = t.input_types || [];
+      if (ins.includes('*')) return true;
+      return ins.some((it) => outs.includes(it));
+    });
+  }
+
+  function addNodeThenMaybeEdge(payload, parentCyId, onAdded) {
+    return window.csrfFetch(`${api}/nodes`, { method: 'POST', body: JSON.stringify(payload) })
+      .then((r) => r.json())
+      .then((n) => {
+        cy.add({ group: 'nodes', data: nodeData(n.node), position: { x: n.node.position_x, y: n.node.position_y } });
+        if (!parentCyId) { drawMinimap(); onAdded && onAdded(n.node); return; }
+        return window.csrfFetch(`${api}/edges`, {
+          method: 'POST',
+          body: JSON.stringify({ source: parentCyId, target: n.node.cy_id }),
+        }).then((r) => r.json()).then((e) => {
+          cy.add({ group: 'edges', data: { id: e.edge.cy_id, source: e.edge.source, target: e.edge.target } });
+          drawMinimap();
+          onAdded && onAdded(n.node);
+        });
+      });
+  }
+
   if (isTemplate) {
     let edgeFrom = null;
     cy.on('tap', 'node', (evt) => {
@@ -447,36 +501,59 @@
       const value = prompt('Input slot label:', 'input');
       if (!value) return;
       const center = cy.extent();
-      window.csrfFetch(`${api}/nodes`, {
-        method: 'POST',
-        body: JSON.stringify({
-          entity_type: 'template:input',
-          value, label: value,
-          position_x: center.x1 + 80, position_y: (center.y1 + center.y2) / 2,
-        }),
-      }).then((r) => r.json()).then((n) => {
-        cy.add({ group: 'nodes', data: nodeData(n.node), position: { x: n.node.position_x, y: n.node.position_y } });
-        drawMinimap();
+      addNodeThenMaybeEdge({
+        entity_type: 'template:input',
+        value, label: value,
+        position_x: center.x1 + 80, position_y: (center.y1 + center.y2) / 2,
+      }, null, (newNode) => {
+        cy.$('node:selected').unselect();
+        cy.getElementById(newNode.cy_id).select();
+        window.toast('Input slot added — click a transform to chain');
       });
     };
 
-    window.templateAddTransform = function (transformName) {
+    function transformPosition(parentNode) {
+      if (parentNode) {
+        const p = parentNode.position();
+        // Spread children vertically based on existing out-degree so we don't stack.
+        const outDeg = parentNode.outgoers('edge').length;
+        return { x: p.x + 260, y: p.y + (outDeg - 0) * 90 - 40 };
+      }
+      const ext = cy.extent();
+      return { x: (ext.x1 + ext.x2) / 2, y: (ext.y1 + ext.y2) / 2 };
+    }
+
+    function dropTransformAfter(parentCyId, transformName) {
       const t = (cfg.transforms || []).find((x) => x.name === transformName);
       if (!t) return;
-      const center = cy.extent();
-      window.csrfFetch(`${api}/nodes`, {
-        method: 'POST',
-        body: JSON.stringify({
-          entity_type: 'template:transform',
-          value: transformName,
-          label: t.display_name || transformName,
-          data: { transform_name: transformName },
-          position_x: (center.x1 + center.x2) / 2, position_y: (center.y1 + center.y2) / 2,
-        }),
-      }).then((r) => r.json()).then((n) => {
-        cy.add({ group: 'nodes', data: nodeData(n.node), position: { x: n.node.position_x, y: n.node.position_y } });
-        drawMinimap();
+      const parent = parentCyId ? cy.getElementById(parentCyId) : null;
+      const parentNode = parent && parent.length ? parent : null;
+      const pos = transformPosition(parentNode);
+      addNodeThenMaybeEdge({
+        entity_type: 'template:transform',
+        value: transformName,
+        label: t.display_name || transformName,
+        data: { transform_name: transformName },
+        position_x: pos.x, position_y: pos.y,
+      }, parentNode ? parentNode.data('id') : null, (newNode) => {
+        // Select the freshly added step so the NEXT click in the sidebar chains onto it.
+        cy.$('node:selected').unselect();
+        cy.getElementById(newNode.cy_id).select();
+        window.toast(parentNode ? 'Step chained' : 'Step added');
       });
+    }
+
+    // Sidebar click: chain onto the currently selected node if there is one.
+    window.templateAddTransform = function (transformName) {
+      const sel = cy.$('node:selected');
+      const parentCyId = sel.length === 1 ? sel[0].data('id') : null;
+      dropTransformAfter(parentCyId, transformName);
+    };
+
+    // Context-menu click: explicit parent passed in.
+    window.templateAddNextStep = function (parentCyId, transformName) {
+      closeMenu();
+      dropTransformAfter(parentCyId, transformName);
     };
   }
 

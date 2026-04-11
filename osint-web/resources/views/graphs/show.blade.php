@@ -23,7 +23,11 @@
 
         @if($graph->isTemplate())
             <button class="w-full mb-2" onclick="templateAddInput()">+ Input slot</button>
-            <div class="text-dim small mb-2">Click a transform to drop it. Shift-click two nodes to connect.</div>
+            <div class="text-dim small mb-2">
+                Right-click a step for compatible next steps.<br>
+                Or select a step + click a transform below to chain it.<br>
+                Shift-click two nodes to connect manually.
+            </div>
         @else
             <div class="text-dim small mb-2">Right-click a node to apply a transform.</div>
         @endif
