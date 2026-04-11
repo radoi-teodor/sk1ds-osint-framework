@@ -56,7 +56,7 @@
                         <span class="text-dim">used</span>
                     @else
                         <span class="pre">{{ $invite_base_url }}/{{ $i->token }}</span>
-                        <button class="ghost" style="padding:2px 8px;font-size:10px;" onclick="navigator.clipboard.writeText('{{ $invite_base_url }}/{{ $i->token }}');toast('copied');">COPY</button>
+                        <button type="button" class="ghost" style="padding:2px 8px;font-size:10px;" onclick="copyToClipboard('{{ $invite_base_url }}/{{ $i->token }}')">COPY</button>
                     @endif
                 </td>
                 <td class="small">{{ $i->creator?->name ?? '—' }}</td>

@@ -74,6 +74,30 @@
     return fetch(url, opts);
   };
 
+  // Clipboard that works on non-secure contexts too (Herd's *.test, etc.)
+  window.copyToClipboard = function (text) {
+    if (navigator.clipboard && window.isSecureContext) {
+      return navigator.clipboard.writeText(text)
+        .then(() => window.toast('copied'))
+        .catch(() => fallback());
+    }
+    fallback();
+    function fallback() {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      ta.setAttribute('readonly', '');
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (_) {}
+      document.body.removeChild(ta);
+      window.toast(ok ? 'copied' : 'copy failed — select manually', ok ? 'success' : 'warn');
+    }
+  };
+
   window.toast = function (msg, kind = 'success') {
     const el = document.createElement('div');
     el.className = 'alert ' + (kind || '');
