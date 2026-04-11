@@ -10,6 +10,11 @@
 <div class="graph-page">
 
     {{-- LEFT: transforms palette --}}
+    @php
+        $grouped = collect($transforms)
+            ->groupBy(fn ($t) => $t['category'] ?? 'other')
+            ->sortKeys();
+    @endphp
     <aside class="graph-sidebar">
         <div class="panel-title" style="margin-top:0">{{ $graph->isTemplate() ? 'Template Steps' : 'Transforms' }}</div>
         @if($engineError)
@@ -18,40 +23,63 @@
 
         @if($graph->isTemplate())
             <button class="w-full mb-2" onclick="templateAddInput()">+ Input slot</button>
-            <div class="text-dim small mb-2">Shift-click one node then another to connect.</div>
-            <div class="transform-list">
-                @foreach($transforms as $t)
-                    <div class="transform-item" onclick="templateAddTransform('{{ $t['name'] }}')">
-                        <div class="name">{{ $t['display_name'] ?? $t['name'] }}</div>
-                        <div class="desc">{{ Str::limit($t['description'] ?? '', 80) }}</div>
-                    </div>
-                @endforeach
-            </div>
+            <div class="text-dim small mb-2">Click a transform to drop it. Shift-click two nodes to connect.</div>
         @else
             <div class="text-dim small mb-2">Right-click a node to apply a transform.</div>
-            <div class="transform-list">
-                @forelse($transforms as $t)
-                    <div class="transform-item" title="{{ $t['description'] ?? '' }}">
-                        <div class="name">{{ $t['display_name'] ?? $t['name'] }}</div>
-                        <div class="desc">
-                            in: {{ implode(',', $t['input_types'] ?? []) }}
-                            · out: {{ implode(',', $t['output_types'] ?? []) }}
-                        </div>
-                    </div>
-                @empty
-                    <div class="text-dim small">No transforms available.</div>
-                @endforelse
-            </div>
         @endif
+
+        <input type="search" id="transform-filter" placeholder="filter / Ctrl+K" autocomplete="off" class="mb-2">
+
+        <div class="transform-groups">
+            @forelse($grouped as $category => $items)
+                <details class="transform-group" open>
+                    <summary>
+                        <span class="cat-name">{{ $category }}</span>
+                        <span class="cat-count">{{ count($items) }}</span>
+                    </summary>
+                    <div class="transform-list">
+                        @foreach($items as $t)
+                            @php
+                                $search = strtolower(
+                                    ($t['name'] ?? '') . ' ' .
+                                    ($t['display_name'] ?? '') . ' ' .
+                                    ($t['description'] ?? '') . ' ' .
+                                    implode(' ', $t['input_types'] ?? []) . ' ' .
+                                    implode(' ', $t['output_types'] ?? [])
+                                );
+                            @endphp
+                            <div class="transform-item"
+                                 data-name="{{ $t['name'] }}"
+                                 data-search="{{ $search }}"
+                                 title="{{ $t['description'] ?? '' }}"
+                                 @if($graph->isTemplate()) onclick="templateAddTransform('{{ $t['name'] }}')" @endif>
+                                <div class="name">{{ $t['display_name'] ?? $t['name'] }}</div>
+                                <div class="desc">
+                                    <span class="io">in:</span> {{ implode(',', $t['input_types'] ?? []) }}
+                                    · <span class="io">out:</span> {{ implode(',', $t['output_types'] ?? []) }}
+                                    @if(!empty($t['required_api_keys']))
+                                        · <span class="keys" title="requires API keys">🔑 {{ implode(',', $t['required_api_keys']) }}</span>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                </details>
+            @empty
+                <div class="text-dim small">No transforms available.</div>
+            @endforelse
+        </div>
     </aside>
 
     {{-- CENTER: canvas --}}
     <div class="graph-canvas-wrap">
         <div id="cy"></div>
+        <div class="present-banner">◉ presentation mode — press P or Esc to exit</div>
 
         <div class="graph-toolbar">
             @unless($graph->isTemplate())
                 <button class="ghost" onclick="graphAddNode()">+ node</button>
+                <button class="ghost" id="present-toggle" onclick="togglePresentMode()" title="Toggle presentation mode (P)">▶ present</button>
             @endunless
             <button class="ghost" onclick="graphFit()">fit</button>
             <button class="ghost" onclick="graphLayout()">layout</button>

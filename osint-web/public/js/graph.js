@@ -122,44 +122,100 @@
     `;
   }
 
+  // ---------- presentation mode ----------
+  const PRESENT_KEY = `osint.present.${cfg.graphId}`;
+  let presentMode = false;
+  const graphPage = document.querySelector('.graph-page');
+  const presentBtn = document.getElementById('present-toggle');
+
+  function setPresentMode(on) {
+    presentMode = !!on;
+    if (graphPage) graphPage.classList.toggle('present-mode', presentMode);
+    if (presentBtn) {
+      presentBtn.classList.toggle('active', presentMode);
+      presentBtn.textContent = presentMode ? '■ edit' : '▶ present';
+    }
+    cy.autoungrabify(presentMode);
+    if (presentMode) closeMenu();
+    // Layout changed — let Cytoscape re-measure the container.
+    setTimeout(() => { cy.resize(); cy.fit(undefined, 40); drawMinimap(); }, 280);
+    try { localStorage.setItem(PRESENT_KEY, presentMode ? '1' : '0'); } catch (_) {}
+  }
+
+  window.togglePresentMode = () => setPresentMode(!presentMode);
+
+  // Restore saved state
+  try {
+    if (localStorage.getItem(PRESENT_KEY) === '1') setPresentMode(true);
+  } catch (_) {}
+
   // ---------- context menu ----------
   const menu = document.getElementById('ctx-menu');
 
   function closeMenu() { if (menu) menu.classList.remove('open'); }
 
   cy.on('cxttap', 'node', (evt) => {
-    if (!menu) return;
+    if (!menu || presentMode) return;
     const n = evt.target;
     const pos = evt.renderedPosition || evt.position;
-    const wrap = document.querySelector('.graph-canvas-wrap').getBoundingClientRect();
-    menu.style.left = (pos.x + 10) + 'px';
-    menu.style.top = (pos.y + 10) + 'px';
     menu.innerHTML = renderMenuForNode(n);
     menu.classList.add('open');
+
+    // Place then clamp inside the canvas area so it doesn't spill offscreen.
+    const wrap = document.querySelector('.graph-canvas-wrap').getBoundingClientRect();
+    menu.style.left = '0px';
+    menu.style.top = '0px';
+    const rect = menu.getBoundingClientRect();
+    const mw = rect.width;
+    const mh = rect.height;
+    let left = pos.x + 8;
+    let top = pos.y + 8;
+    if (left + mw > wrap.width - 8) left = Math.max(8, pos.x - mw - 8);
+    if (top + mh > wrap.height - 8) top = Math.max(8, wrap.height - mh - 8);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
   });
 
   function renderMenuForNode(n) {
     const type = n.data('entity_type');
+    const value = n.data('value') || '';
+    const nodeId = esc(n.data('id'));
+    const short = value.length > 30 ? value.slice(0, 27) + '...' : value;
+
+    let html = `<div class="ctx-header">${esc(type)} · ${esc(short)}</div>`;
+
+    if (isTemplate) {
+      html += `<div class="ctx-item danger" onclick="window.graphDeleteNode('${nodeId}')">Delete step</div>`;
+      return html;
+    }
+
     const compatible = (cfg.transforms || []).filter((t) =>
       (t.input_types || []).includes('*') || (t.input_types || []).includes(type)
     );
-    let html = `<div class="ctx-header">${esc(type)} · ${esc(n.data('value') || '')}</div>`;
-    if (isTemplate) {
-      html += `<div class="ctx-item danger" onclick="window.graphDeleteNode('${n.data('id')}')">Delete step</div>`;
-      return html;
-    }
+
     if (compatible.length === 0) {
-      html += `<div class="ctx-item text-dim">No transforms for this type</div>`;
+      html += `<div class="ctx-item" style="color:var(--text-dim)">No transforms for this type</div>`;
     } else {
+      // group by category
+      const byCat = {};
       for (const t of compatible) {
-        html += `<div class="ctx-item" onclick="window.runTransform('${esc(n.data('id'))}','${esc(t.name)}')">
-          <div><strong>${esc(t.display_name || t.name)}</strong></div>
-          <div class="ctx-desc">${esc(t.description || '')}</div>
-        </div>`;
+        const cat = t.category || 'other';
+        (byCat[cat] ||= []).push(t);
+      }
+      const cats = Object.keys(byCat).sort();
+      for (const cat of cats) {
+        html += `<div class="ctx-cat">${esc(cat)}</div>`;
+        for (const t of byCat[cat]) {
+          const desc = (t.description || '').replace(/"/g, '&quot;');
+          const needsKey = (t.required_api_keys || []).length > 0 ? ' 🔑' : '';
+          html += `<div class="ctx-item" title="${desc}" onclick="window.runTransform('${nodeId}','${esc(t.name)}')">${esc(t.display_name || t.name)}${needsKey}</div>`;
+        }
       }
     }
-    html += `<div class="ctx-item" onclick="window.graphAddOutgoing('${esc(n.data('id'))}')">Add child node...</div>`;
-    html += `<div class="ctx-item danger" onclick="window.graphDeleteNode('${esc(n.data('id'))}')">Delete node</div>`;
+
+    html += `<div class="ctx-cat">node</div>`;
+    html += `<div class="ctx-item action" onclick="window.graphAddOutgoing('${nodeId}')">+ child node...</div>`;
+    html += `<div class="ctx-item danger" onclick="window.graphDeleteNode('${nodeId}')">delete node</div>`;
     return html;
   }
 
@@ -539,9 +595,66 @@
     setTimeout(drawMinimap, 500);
   };
 
-  // ---------- escape key closes menu ----------
+  // ---------- transforms palette filter ----------
+  const filterInput = document.getElementById('transform-filter');
+  if (filterInput) {
+    const groups = Array.from(document.querySelectorAll('.transform-group'));
+    const items = Array.from(document.querySelectorAll('.transform-item'));
+
+    function applyFilter(q) {
+      q = (q || '').trim().toLowerCase();
+      if (!q) {
+        items.forEach((i) => i.classList.remove('filtered-out'));
+        groups.forEach((g) => g.classList.remove('filtered-out'));
+        return;
+      }
+      const terms = q.split(/\s+/);
+      groups.forEach((g) => {
+        const groupItems = Array.from(g.querySelectorAll('.transform-item'));
+        let visible = 0;
+        groupItems.forEach((it) => {
+          const hay = it.dataset.search || '';
+          const ok = terms.every((t) => hay.includes(t));
+          it.classList.toggle('filtered-out', !ok);
+          if (ok) visible++;
+        });
+        g.classList.toggle('filtered-out', visible === 0);
+        if (visible > 0) g.open = true;
+      });
+    }
+
+    filterInput.addEventListener('input', (e) => applyFilter(e.target.value));
+    filterInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { filterInput.value = ''; applyFilter(''); filterInput.blur(); }
+    });
+
+    // Ctrl+K / Cmd+K focuses the filter
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        filterInput.focus();
+        filterInput.select();
+      }
+    });
+  }
+
+  // ---------- global keyboard shortcuts ----------
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeMenu();
+    // ignore when typing in an input/textarea/contenteditable
+    const tag = (e.target && e.target.tagName) || '';
+    const typing = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target && e.target.isContentEditable);
+
+    if (e.key === 'Escape') {
+      closeMenu();
+      if (presentMode) setPresentMode(false);
+      return;
+    }
+    if (!typing && (e.key === 'p' || e.key === 'P')) {
+      if (!isTemplate) {
+        e.preventDefault();
+        window.togglePresentMode();
+      }
+    }
   });
 
   function esc(s) {
