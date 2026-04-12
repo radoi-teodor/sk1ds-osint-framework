@@ -20,7 +20,7 @@ class EnsureSetupComplete
 
         $allowedWhileEmpty = ['setup', 'setup/create', 'up'];
 
-        if (str_starts_with($path, 'docs')) {
+        if (str_starts_with($path, 'docs') || str_starts_with($path, 'auth/totp')) {
             return $next($request);
         }
 

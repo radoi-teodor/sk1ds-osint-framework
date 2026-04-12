@@ -14,6 +14,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(prepend: [
             \App\Http\Middleware\EnsureSetupComplete::class,
         ]);
+        $middleware->alias([
+            'totp.verified' => \App\Http\Middleware\EnsureTotpVerified::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

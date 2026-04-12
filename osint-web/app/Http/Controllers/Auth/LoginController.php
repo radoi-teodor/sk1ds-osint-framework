@@ -23,14 +23,29 @@ class LoginController extends Controller
             'email' => ['required', 'email'],
             'password' => ['required', 'string'],
         ]);
+        $remember = $request->boolean('remember');
 
-        if (! Auth::attempt($credentials, (bool) $request->boolean('remember'))) {
+        if (! Auth::attempt($credentials, $remember)) {
             throw ValidationException::withMessages([
                 'email' => 'Invalid credentials.',
             ]);
         }
 
+        $user = Auth::user();
+
+        if ($user->hasTotpEnabled()) {
+            $userId = $user->id;
+            Auth::logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+            $request->session()->regenerate();
+            $request->session()->put('mfa_user_id', $userId);
+            $request->session()->put('mfa_remember', $remember);
+            return redirect('/auth/totp-challenge');
+        }
+
         $request->session()->regenerate();
+        $request->session()->put('totp_verified', true);
         return redirect()->intended('/projects');
     }
 

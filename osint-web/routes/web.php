@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\ApiKeyController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\TotpChallengeController;
+use App\Http\Controllers\Auth\TotpSetupController;
 use App\Http\Controllers\DocsController;
 use App\Http\Controllers\GraphApiController;
 use App\Http\Controllers\GraphController;
@@ -29,13 +31,25 @@ Route::get('/login', [LoginController::class, 'showLogin'])->name('login');
 Route::post('/login', [LoginController::class, 'attempt']);
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
+// ---- TOTP challenge (mid-login, no auth) ----
+Route::get('/auth/totp-challenge', [TotpChallengeController::class, 'showChallenge'])->name('totp.challenge');
+Route::post('/auth/totp-challenge', [TotpChallengeController::class, 'verifyChallenge'])->middleware('throttle:5,1');
+Route::post('/auth/totp-cancel', [TotpChallengeController::class, 'cancel']);
+
 // ---- invites (public) ----
 Route::get('/invite/{token}', [InviteController::class, 'show'])->name('invite.show');
 Route::post('/invite/{token}', [InviteController::class, 'accept'])->name('invite.accept');
 
 // ---- authenticated ----
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'totp.verified'])->group(function () {
     Route::get('/', fn () => redirect('/projects'));
+
+    // profile / security
+    Route::get('/profile/security', [TotpSetupController::class, 'show'])->name('profile.security');
+    Route::get('/profile/security/totp/enable', [TotpSetupController::class, 'create']);
+    Route::post('/profile/security/totp/enable', [TotpSetupController::class, 'store']);
+    Route::post('/profile/security/totp/disable', [TotpSetupController::class, 'destroy']);
+    Route::post('/profile/security/totp/recovery-codes', [TotpSetupController::class, 'regenerateRecoveryCodes']);
 
     // projects
     Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index');

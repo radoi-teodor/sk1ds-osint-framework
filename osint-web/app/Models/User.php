@@ -20,6 +20,8 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'totp_secret',
+        'totp_recovery_codes',
     ];
 
     protected function casts(): array
@@ -28,6 +30,14 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'totp_secret' => 'encrypted',
+            'totp_confirmed_at' => 'datetime',
+            'totp_recovery_codes' => 'encrypted:array',
         ];
+    }
+
+    public function hasTotpEnabled(): bool
+    {
+        return $this->totp_secret !== null && $this->totp_confirmed_at !== null;
     }
 }

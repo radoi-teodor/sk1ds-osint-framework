@@ -56,7 +56,7 @@
             </div>
         </nav>
         <div class="nav-user">
-            <span class="user-name">{{ auth()->user()->name }}</span>
+            <a href="/profile/security" class="user-name" title="Security settings">{{ auth()->user()->name }}</a>
             <button type="button" class="theme-toggle" title="Toggle theme">☀ LIGHT</button>
             <form method="POST" action="/logout" style="margin:0">
                 @csrf
