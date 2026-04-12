@@ -15,8 +15,8 @@ it('creates the first admin via /setup', function () {
     $response = $this->post('/setup', [
         'name' => 'Neo',
         'email' => 'neo@zion.io',
-        'password' => 'redpill123',
-        'password_confirmation' => 'redpill123',
+        'password' => 'RedPill123',
+        'password_confirmation' => 'RedPill123',
     ]);
     $response->assertRedirect('/projects');
     $user = User::first();

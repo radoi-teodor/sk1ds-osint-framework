@@ -27,8 +27,8 @@ it('accepts a valid invite and creates a user', function () {
     $this->post("/invite/$token", [
         'name' => 'Trinity',
         'email' => 'trinity@zion.io',
-        'password' => 'matrixhasyou',
-        'password_confirmation' => 'matrixhasyou',
+        'password' => 'MatrixHas1',
+        'password_confirmation' => 'MatrixHas1',
     ])->assertRedirect('/projects');
 
     expect(User::where('email', 'trinity@zion.io')->exists())->toBeTrue();

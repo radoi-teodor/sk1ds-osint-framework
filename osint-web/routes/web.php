@@ -27,11 +27,11 @@ Route::get('/docs/{page}', [DocsController::class, 'show'])->name('docs.show');
 
 // ---- setup ----
 Route::get('/setup', [SetupController::class, 'show'])->name('setup.show');
-Route::post('/setup', [SetupController::class, 'store'])->name('setup.store');
+Route::post('/setup', [SetupController::class, 'store'])->middleware('throttle:3,1')->name('setup.store');
 
 // ---- auth ----
 Route::get('/login', [LoginController::class, 'showLogin'])->name('login');
-Route::post('/login', [LoginController::class, 'attempt']);
+Route::post('/login', [LoginController::class, 'attempt'])->middleware('throttle:5,1');
 Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
 
 // ---- TOTP challenge (mid-login, no auth) ----
@@ -41,7 +41,7 @@ Route::post('/auth/totp-cancel', [TotpChallengeController::class, 'cancel']);
 
 // ---- invites (public) ----
 Route::get('/invite/{token}', [InviteController::class, 'show'])->name('invite.show');
-Route::post('/invite/{token}', [InviteController::class, 'accept'])->name('invite.accept');
+Route::post('/invite/{token}', [InviteController::class, 'accept'])->middleware('throttle:5,1')->name('invite.accept');
 
 // ---- authenticated ----
 Route::middleware(['auth', 'totp.verified'])->group(function () {

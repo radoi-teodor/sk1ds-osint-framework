@@ -99,6 +99,6 @@ class TotpSetupController extends Controller
 
     protected function generateRecoveryCodes(int $count = 8): array
     {
-        return array_map(fn () => strtolower(Str::random(10)), range(1, $count));
+        return array_map(fn () => strtolower(Str::random(16)), range(1, $count));
     }
 }
