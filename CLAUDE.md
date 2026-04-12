@@ -99,6 +99,15 @@ is not actually required — the UI loads assets straight from `public/css` and
 - Engine client: `osint-web/app/Services/EngineClient.php`
 - Hacker theme CSS: `osint-web/public/css/app.css`
 
+## Mandatory: keep SDK docs in sync
+
+When modifying anything in the Python transform system — `@transform` decorator,
+`Node`/`Edge` classes, `SlaveClient`, `api_keys`, entity types, or transform
+conventions — **always** check if `osint-web/resources/views/docs/` pages need
+updating. The SDK web documentation is the user-facing reference for transform
+authors. Sections to verify: decorator parameters, Node fields, SlaveClient API,
+API key resolution, entity type list, examples. If in doubt, update.
+
 ## Do not
 
 - Add Node/React/Vue — the whole UI is intentionally Blade + vanilla JS + CDN libraries.

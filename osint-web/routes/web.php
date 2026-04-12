@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ApiKeyController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\DocsController;
 use App\Http\Controllers\GraphApiController;
 use App\Http\Controllers\GraphController;
 use App\Http\Controllers\InvestigationJobController;
@@ -13,6 +14,11 @@ use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TransformationController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
+
+// ---- SDK docs (public, no auth) ----
+Route::get('/docs', [DocsController::class, 'index'])->name('docs.index');
+Route::get('/docs/search.json', [DocsController::class, 'searchIndex']);
+Route::get('/docs/{page}', [DocsController::class, 'show'])->name('docs.show');
 
 // ---- setup ----
 Route::get('/setup', [SetupController::class, 'show'])->name('setup.show');

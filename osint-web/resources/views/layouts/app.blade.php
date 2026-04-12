@@ -32,6 +32,7 @@
                 <div class="nav-dropdown-menu">
                     <a href="/transformations" class="{{ request()->is('transformations*') ? 'active' : '' }}">Transforms</a>
                     <a href="/templates" class="{{ request()->is('templates*') ? 'active' : '' }}">Templates</a>
+                    <a href="/docs" target="_blank">SDK Docs ↗</a>
                 </div>
             </div>
 

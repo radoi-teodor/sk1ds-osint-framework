@@ -20,6 +20,10 @@ class EnsureSetupComplete
 
         $allowedWhileEmpty = ['setup', 'setup/create', 'up'];
 
+        if (str_starts_with($path, 'docs')) {
+            return $next($request);
+        }
+
         if (! $hasUsers && ! in_array($path, $allowedWhileEmpty, true)) {
             return redirect('/setup');
         }
