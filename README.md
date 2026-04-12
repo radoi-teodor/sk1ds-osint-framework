@@ -23,11 +23,31 @@ Think of it as your own Maltego, but self-hosted, extensible, and with a hacker-
 
 The fastest way to get running. Requires [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/).
 
+### Option A: Pre-built images from Docker Hub (no clone needed)
+
+Download a single file and run — no build, no source code required:
+
 ```bash
-git clone <repo-url> osint-framework
+# Download the compose file
+curl -O https://raw.githubusercontent.com/radoi-teodor/osint-framework/main/docker-compose.hub.yml
+
+# Start the platform
+docker compose -f docker-compose.hub.yml up -d
+```
+
+Images pulled automatically from Docker Hub:
+- [`edimemune/sk1ds-osint-framework-web`](https://hub.docker.com/r/edimemune/sk1ds-osint-framework-web)
+- [`edimemune/sk1ds-osint-framework-engine`](https://hub.docker.com/r/edimemune/sk1ds-osint-framework-engine)
+
+### Option B: Build from source
+
+```bash
+git clone https://github.com/radoi-teodor/osint-framework.git
 cd osint-framework
 docker compose up -d
 ```
+
+---
 
 Wait ~30 seconds for MySQL to initialize and migrations to run. Then open:
 
@@ -37,18 +57,19 @@ http://localhost:8000
 
 You'll be redirected to **`/setup`** to create your first admin account. After that, the platform is ready with 8 pre-built investigation templates.
 
-**What `docker compose up` does automatically:**
-1. Starts MySQL 8 with persistent storage
-2. Starts the Python engine (54 transforms, 4 generators)
-3. Runs Laravel migrations + seeds 8 investigation templates
-4. Starts the Laravel web server on port 8000
-5. Starts the queue worker for async transform execution
+**What happens automatically on first start:**
+1. MySQL 8 starts with persistent storage
+2. Python engine starts (54 transforms, 4 generators, nmap included)
+3. Laravel runs migrations + seeds 8 investigation templates
+4. Web server starts on port 8000
+5. Queue worker starts for async transform execution
 
 To stop: `docker compose down` (data persists in Docker volumes).
+To stop and wipe data: `docker compose down -v`.
 
 ### Docker environment
 
-Customize by creating a `.env` file at the repo root:
+Customize by creating a `.env` file next to the compose file:
 
 ```env
 MYSQL_ROOT_PASSWORD=your-secure-password
