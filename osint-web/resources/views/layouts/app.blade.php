@@ -31,6 +31,7 @@
                 </button>
                 <div class="nav-dropdown-menu">
                     <a href="/transformations" class="{{ request()->is('transformations*') ? 'active' : '' }}">Transforms</a>
+                    <a href="/generators" class="{{ request()->is('generators*') ? 'active' : '' }}">Generators</a>
                     <a href="/templates" class="{{ request()->is('templates*') ? 'active' : '' }}">Templates</a>
                     <a href="/docs" target="_blank">SDK Docs ↗</a>
                 </div>
@@ -43,6 +44,7 @@
                 <div class="nav-dropdown-menu">
                     <a href="/api-keys" class="{{ request()->is('api-keys*') ? 'active' : '' }}">🔑 API Keys</a>
                     <a href="/slaves" class="{{ request()->is('slaves*') ? 'active' : '' }}">🖥 Slaves</a>
+                    <a href="/files" class="{{ request()->is('files*') ? 'active' : '' }}">📁 Files</a>
                 </div>
             </div>
 

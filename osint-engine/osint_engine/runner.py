@@ -42,18 +42,22 @@ def _normalize(result: Any) -> tuple[list[dict], list[dict]]:
     raise TypeError(f"Transform must return list/dict/Node, got {type(result).__name__}")
 
 
-def _invoke(spec: TransformSpec, node: Node, api_keys: dict, slave_config: dict | None):
-    """Call the transform function with the right arity (2 or 3 args)."""
+def _invoke(spec: TransformSpec, node: Node, api_keys: dict, slave_config: dict | None, generator_output: str | None = None):
+    """Call the transform function with the right arity."""
     from osint_engine.slave_client import SlaveClient, SlaveConfig
+
+    kwargs: dict[str, Any] = {}
+    if generator_output is not None:
+        kwargs["generator_output"] = generator_output
 
     if spec.requires_slave and slave_config:
         cfg = SlaveConfig.from_dict(slave_config)
         with SlaveClient(cfg) as client:
-            return spec.func(node, api_keys, client)
+            return spec.func(node, api_keys, client, **kwargs)
     elif spec.requires_slave:
         return [Node(type="note", value="no slave configured for this transform", label="no slave")]
     else:
-        return spec.func(node, api_keys)
+        return spec.func(node, api_keys, **kwargs)
 
 
 async def run_transform(
@@ -61,6 +65,7 @@ async def run_transform(
     node: Node,
     api_keys: dict[str, str],
     slave_config: dict | None = None,
+    generator_output: str | None = None,
 ) -> dict[str, Any]:
     """Run a transformation asynchronously with a timeout."""
     if spec.func is None:
@@ -70,7 +75,7 @@ async def run_transform(
     try:
         raw = await asyncio.wait_for(
             loop.run_in_executor(
-                _executor, _invoke, spec, node, api_keys, slave_config
+                _executor, lambda: _invoke(spec, node, api_keys, slave_config, generator_output)
             ),
             timeout=spec.timeout,
         )

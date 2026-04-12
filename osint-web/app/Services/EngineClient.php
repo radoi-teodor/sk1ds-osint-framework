@@ -59,7 +59,7 @@ class EngineClient
         return $this->wrap(fn () => $this->http()->get('/transforms'));
     }
 
-    public function runTransform(string $name, array $node, array $apiKeys = [], ?array $slave = null): array
+    public function runTransform(string $name, array $node, array $apiKeys = [], ?array $slave = null, ?string $generatorOutput = null, ?int $requestTimeout = null): array
     {
         $body = [
             'node' => $node,
@@ -68,7 +68,44 @@ class EngineClient
         if ($slave !== null) {
             $body['slave'] = $slave;
         }
-        return $this->wrap(fn () => $this->http()->post("/transforms/{$name}/run", $body));
+        if ($generatorOutput !== null) {
+            $body['generator_output'] = $generatorOutput;
+        }
+        $http = $this->http();
+        if ($requestTimeout) {
+            $http = $http->timeout($requestTimeout);
+        }
+        return $this->wrap(fn () => $http->post("/transforms/{$name}/run", $body));
+    }
+
+    public function listGenerators(): array
+    {
+        return $this->wrap(fn () => $this->http()->get('/generators'));
+    }
+
+    public function runGenerator(string $name, array $inputs): array
+    {
+        return $this->wrap(fn () => $this->http()->post("/generators/{$name}/run", $inputs));
+    }
+
+    public function getGeneratorSource(string $name): array
+    {
+        return $this->wrap(fn () => $this->http()->get("/generators/{$name}/source"));
+    }
+
+    public function updateGeneratorSource(string $name, string $source): array
+    {
+        return $this->wrap(fn () => $this->http()->put("/generators/{$name}/source", ['source' => $source]));
+    }
+
+    public function createGenerator(string $filename, string $source): array
+    {
+        return $this->wrap(fn () => $this->http()->post('/generators', ['filename' => $filename, 'source' => $source]));
+    }
+
+    public function deleteGenerator(string $name): array
+    {
+        return $this->wrap(fn () => $this->http()->delete("/generators/{$name}"));
     }
 
     public function testSlave(array $slavePayload): array

@@ -5,6 +5,8 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\TotpChallengeController;
 use App\Http\Controllers\Auth\TotpSetupController;
 use App\Http\Controllers\DocsController;
+use App\Http\Controllers\FileManagerController;
+use App\Http\Controllers\GeneratorController;
 use App\Http\Controllers\GraphApiController;
 use App\Http\Controllers\GraphController;
 use App\Http\Controllers\InvestigationJobController;
@@ -95,6 +97,29 @@ Route::middleware(['auth', 'totp.verified'])->group(function () {
         ->where('name', '[A-Za-z0-9._\-]+');
     Route::post('/api/transformations/validate', [TransformationController::class, 'validateSource']);
     Route::post('/api/transformations/reload', [TransformationController::class, 'reload']);
+
+    // generators (code editor)
+    Route::get('/generators', [GeneratorController::class, 'index'])->name('generators.index');
+    Route::get('/generators/new', [GeneratorController::class, 'create'])->name('generators.create');
+    Route::post('/generators', [GeneratorController::class, 'store']);
+    Route::get('/generators/{name}/edit', [GeneratorController::class, 'edit'])
+        ->where('name', '[A-Za-z0-9._\-]+');
+    Route::put('/generators/{name}', [GeneratorController::class, 'update'])
+        ->where('name', '[A-Za-z0-9._\-]+');
+    Route::delete('/generators/{name}', [GeneratorController::class, 'destroy'])
+        ->where('name', '[A-Za-z0-9._\-]+');
+
+    // file manager
+    Route::get('/files', [FileManagerController::class, 'index'])->name('files.index');
+    Route::get('/api/files/list', [FileManagerController::class, 'apiList']);
+    Route::get('/api/files', [FileManagerController::class, 'apiAll']);
+    Route::post('/api/files/upload', [FileManagerController::class, 'apiUpload']);
+    Route::post('/api/files/folder', [FileManagerController::class, 'apiCreateFolder']);
+    Route::patch('/api/files/{uploaded_file}/rename', [FileManagerController::class, 'apiRenameFile']);
+    Route::patch('/api/files/{uploaded_file}/move', [FileManagerController::class, 'apiMoveFile']);
+    Route::delete('/api/files/{uploaded_file}', [FileManagerController::class, 'apiDeleteFile']);
+    Route::post('/api/files/folder/rename', [FileManagerController::class, 'apiRenameFolder']);
+    Route::post('/api/files/folder/delete', [FileManagerController::class, 'apiDeleteFolder']);
 
     // api keys
     Route::get('/api-keys', [ApiKeyController::class, 'index'])->name('api-keys.index');

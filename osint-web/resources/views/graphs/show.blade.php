@@ -176,8 +176,37 @@
         entityTypes: @json(\App\Support\EntityTypes::all()),
         transforms: @json($transforms),
         templates: @json($templates),
-        slaves: @json($slaves),
+        slaves: @json($slaves ?? []),
+        generators: @json($generators ?? []),
     };
 </script>
+
+{{-- Generator modal (shown when running transforms that need a generator) --}}
+<div class="modal-backdrop" id="gen-modal">
+    <div class="modal">
+        <h3 id="gen-modal-title">Configure generator</h3>
+        <form onsubmit="event.preventDefault(); submitGeneratorTransform();" class="stack">
+            <div class="form-row">
+                <label>Generator</label>
+                <select id="gen-select" onchange="onGenSelect()">
+                    <option value="">— none —</option>
+                </select>
+            </div>
+            <div class="form-row" id="gen-file-row" style="display:none">
+                <label>File</label>
+                <select id="gen-file-select"><option value="">loading...</option></select>
+            </div>
+            <div class="form-row" id="gen-text-row" style="display:none">
+                <label>Text input</label>
+                <textarea id="gen-text" rows="4" class="mono" placeholder="one entry per line..."></textarea>
+            </div>
+            <div class="buttons">
+                <button type="button" class="ghost" onclick="closeGenModal()">Cancel</button>
+                <button type="submit">⟫ RUN</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script src="{{ asset('js/graph.js') }}" defer></script>
 @endsection

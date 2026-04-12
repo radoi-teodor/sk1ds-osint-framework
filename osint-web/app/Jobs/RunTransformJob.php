@@ -21,7 +21,7 @@ class RunTransformJob implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $timeout = 180;
+    public int $timeout = 900;
     public int $tries = 1;
 
     public function __construct(public int $jobId) {}
@@ -52,13 +52,15 @@ class RunTransformJob implements ShouldQueue
             'created_edges' => [],
         ]);
 
-        // Resolve required API keys once
+        // Resolve required API keys + transform timeout
         $requiredKeys = [];
+        $transformTimeout = 60;
         $listResp = $engine->listTransforms();
         if ($listResp['ok']) {
             foreach ($listResp['data']['transforms'] ?? [] as $t) {
                 if ($t['name'] === $job->transform_name) {
                     $requiredKeys = $t['required_api_keys'] ?? [];
+                    $transformTimeout = ($t['timeout'] ?? 60) + 30;
                     break;
                 }
             }
@@ -74,10 +76,44 @@ class RunTransformJob implements ShouldQueue
             }
         }
 
+        // Run generator if configured (once for the whole job)
+        $generatorOutput = $job->generator_output;
+        if ($job->generator_name && $generatorOutput === null) {
+            $genInputs = ['text' => $job->generator_text_input];
+            if ($job->generator_file_id) {
+                $file = \App\Models\UploadedFile::find($job->generator_file_id);
+                if ($file) {
+                    $genInputs['files'] = [$file->absolutePath()];
+                }
+            }
+            $genResp = $engine->runGenerator($job->generator_name, $genInputs);
+            if ($genResp['ok'] && isset($genResp['data']['output'])) {
+                $generatorOutput = $genResp['data']['output'];
+                $job->update(['generator_output' => $generatorOutput]);
+            } elseif (! $genResp['ok']) {
+                $job->update([
+                    'status' => InvestigationJob::STATUS_FAILED,
+                    'error' => 'Generator failed: ' . ($genResp['error'] ?? 'unknown'),
+                    'finished_at' => now(),
+                ]);
+                return;
+            } else {
+                $errMsg = $genResp['data']['error'] ?? null;
+                if ($errMsg) {
+                    $job->update([
+                        'status' => InvestigationJob::STATUS_FAILED,
+                        'error' => 'Generator error: ' . $errMsg,
+                        'finished_at' => now(),
+                    ]);
+                    return;
+                }
+            }
+        }
+
         $errors = [];
         foreach ($sources as $source) {
             try {
-                $this->runOne($engine, $graph, $job, $source, $apiKeys, $slave);
+                $this->runOne($engine, $graph, $job, $source, $apiKeys, $slave, $generatorOutput, $transformTimeout);
             } catch (Throwable $e) {
                 $errors[] = "[{$source->cy_id}] " . $e->getMessage();
             }
@@ -107,7 +143,7 @@ class RunTransformJob implements ShouldQueue
         }
     }
 
-    protected function runOne(EngineClient $engine, Graph $graph, InvestigationJob $job, GraphNode $source, array $apiKeys, ?array $slave = null): void
+    protected function runOne(EngineClient $engine, Graph $graph, InvestigationJob $job, GraphNode $source, array $apiKeys, ?array $slave = null, ?string $generatorOutput = null, ?int $requestTimeout = null): void
     {
         $start = microtime(true);
         $result = $engine->runTransform($job->transform_name, [
@@ -115,7 +151,7 @@ class RunTransformJob implements ShouldQueue
             'value' => $source->value,
             'label' => $source->label,
             'data' => (object) ($source->data ?: []),
-        ], $apiKeys, $slave);
+        ], $apiKeys, $slave, $generatorOutput, $requestTimeout);
         $duration = (int) ((microtime(true) - $start) * 1000);
 
         $runRow = TransformationRun::create([

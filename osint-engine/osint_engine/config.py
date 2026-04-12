@@ -14,6 +14,18 @@ class Settings:
             str(Path(__file__).resolve().parent.parent / "transforms"),
         )
     )
+    generators_dir: Path = Path(
+        os.getenv(
+            "ENGINE_GENERATORS_DIR",
+            str(Path(__file__).resolve().parent.parent / "generators"),
+        )
+    )
+    uploads_dir: Path = Path(
+        os.getenv(
+            "ENGINE_UPLOADS_DIR",
+            str(Path(__file__).resolve().parent.parent.parent / "osint-web" / "storage" / "app" / "uploads"),
+        )
+    )
 
 
 settings = Settings()

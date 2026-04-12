@@ -530,10 +530,12 @@
           renderJobs();
 
           if (data.status === 'completed' || data.status === 'failed' || data.status === 'cancelled') {
-            if (data.status === 'completed') {
+            if (data.status === 'completed' && !data.error) {
               window.toast(`Done: +${data.total_nodes} nodes`);
+            } else if (data.status === 'completed' && data.error) {
+              window.toast(`Done with errors: ${data.error.slice(0, 200)}`, 'warn');
             } else {
-              window.toast('Job ' + data.status + ': ' + (data.error || ''), 'danger');
+              window.toast('Job ' + data.status + ': ' + (data.error || 'unknown error'), 'danger');
             }
             setTimeout(() => { activeJobs.delete(jobId); renderJobs(); }, 4000);
             return;
@@ -559,19 +561,122 @@
     return extra;
   }
 
-  window.runTransform = function (cyId, transformName) {
-    closeMenu();
-    window.toast(`Queuing ${transformName}...`);
+  function dispatchTransform(cyIdOrIds, transformName, genParams) {
+    const body = typeof cyIdOrIds === 'string'
+      ? { source_cy_id: cyIdOrIds, transform: transformName }
+      : { source_cy_ids: cyIdOrIds, transform: transformName };
+    if (genParams) Object.assign(body, genParams);
+    const payload = transformPayload(body);
     window.csrfFetch(`${api}/run-transform`, {
       method: 'POST',
-      body: JSON.stringify(transformPayload({ source_cy_id: cyId, transform: transformName })),
+      body: JSON.stringify(payload),
     })
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) {
+          return r.text().then(txt => {
+            window.toast('Server error ' + r.status + ': ' + txt.slice(0, 200), 'danger');
+            throw new Error('stop');
+          });
+        }
+        return r.json();
+      })
       .then((data) => {
-        if (!data.ok) { window.toast('Error: ' + (data.error || 'unknown'), 'danger'); return; }
+        if (!data) return;
+        if (!data.ok) { window.toast('Error: ' + (data.error || JSON.stringify(data.errors || data.message || 'unknown')), 'danger'); return; }
         pollJob(data.job_id);
       })
-      .catch((e) => window.toast('Network error: ' + e.message, 'danger'));
+      .catch((e) => {
+        if (e.message !== 'stop') window.toast('Request failed: ' + e.message, 'danger');
+      });
+  }
+
+  // ---------- generator modal ----------
+  let _pendingGen = null; // { cyIdOrIds, transformName }
+  const genModal = document.getElementById('gen-modal');
+  const genSelect = document.getElementById('gen-select');
+  const genFileRow = document.getElementById('gen-file-row');
+  const genTextRow = document.getElementById('gen-text-row');
+  const genFileSelect = document.getElementById('gen-file-select');
+  const genText = document.getElementById('gen-text');
+  let _filesLoaded = false;
+
+  function openGenModal(cyIdOrIds, transformName) {
+    _pendingGen = { cyIdOrIds, transformName };
+    const spec = (cfg.transforms || []).find((t) => t.name === transformName);
+    document.getElementById('gen-modal-title').textContent = 'Generator for: ' + (spec ? spec.display_name : transformName);
+
+    // populate generator dropdown (only compatible ones)
+    const allowed = spec && spec.required_generators && spec.required_generators.length
+      ? spec.required_generators
+      : null;
+    genSelect.innerHTML = '<option value="">— none (skip generator) —</option>';
+    for (const g of cfg.generators || []) {
+      if (allowed && !allowed.includes(g.name)) continue;
+      genSelect.innerHTML += `<option value="${g.name}" data-inputs="${(g.input_types || []).join(',')}">${g.display_name || g.name}</option>`;
+    }
+    genFileRow.style.display = 'none';
+    genTextRow.style.display = 'none';
+    if (!_filesLoaded) loadFileList();
+    genModal.classList.add('open');
+  }
+
+  function closeGenModal() {
+    genModal.classList.remove('open');
+    _pendingGen = null;
+  }
+  window.closeGenModal = closeGenModal;
+
+  window.onGenSelect = function () {
+    const opt = genSelect.selectedOptions[0];
+    const inputs = (opt && opt.dataset.inputs) || '';
+    genFileRow.style.display = inputs.includes('file') ? '' : 'none';
+    genTextRow.style.display = inputs.includes('text') ? '' : 'none';
+  };
+
+  function loadFileList() {
+    window.csrfFetch('/api/files').then(r => r.json()).then(data => {
+      _filesLoaded = true;
+      genFileSelect.innerHTML = '<option value="">— select file —</option>';
+      for (const f of data.files || []) {
+        const display = f.display || f.original_name;
+        const size = (f.size_bytes/1024).toFixed(0);
+        genFileSelect.innerHTML += `<option value="${f.id}">${display} (${size} KB)</option>`;
+      }
+    }).catch(() => {});
+  }
+
+  window.submitGeneratorTransform = function () {
+    if (!_pendingGen) { window.toast('No pending generator transform', 'warn'); return; }
+    const { cyIdOrIds, transformName } = _pendingGen;
+    const genParams = {};
+    if (genSelect.value) {
+      genParams.generator_name = genSelect.value;
+      if (genFileRow.style.display !== 'none' && genFileSelect.value) {
+        genParams.generator_file_id = parseInt(genFileSelect.value, 10);
+      }
+      if (genTextRow.style.display !== 'none' && genText.value.trim()) {
+        genParams.generator_text_input = genText.value.trim();
+      }
+    }
+    closeGenModal();
+    const label = typeof cyIdOrIds === 'string' ? '' : ` × ${cyIdOrIds.length}`;
+    window.toast(`Queuing ${transformName}${label}...`);
+    dispatchTransform(cyIdOrIds, transformName, genParams);
+  };
+
+  function needsGeneratorUI(transformName) {
+    const spec = (cfg.transforms || []).find((t) => t.name === transformName);
+    return spec && (spec.accepts_generator || (spec.required_generators && spec.required_generators.length > 0));
+  }
+
+  window.runTransform = function (cyId, transformName) {
+    closeMenu();
+    if (needsGeneratorUI(transformName)) {
+      openGenModal(cyId, transformName);
+      return;
+    }
+    window.toast(`Queuing ${transformName}...`);
+    dispatchTransform(cyId, transformName);
   };
 
   window.sidebarRunTransform = function (transformName) {
@@ -580,32 +685,33 @@
       window.toast('Select one or more nodes first', 'warn');
       return;
     }
-    // Check if transform requires slave and none selected
     const spec = (cfg.transforms || []).find((t) => t.name === transformName);
     if (spec && spec.requires_slave && !getSlaveId()) {
       window.toast('This transform requires a slave — select one in the right sidebar', 'warn');
       return;
     }
     const ids = sel.map((n) => n.data('id'));
+    if (needsGeneratorUI(transformName)) {
+      openGenModal(ids.length === 1 ? ids[0] : ids, transformName);
+      return;
+    }
     if (ids.length === 1) {
-      window.runTransform(ids[0], transformName);
+      window.toast(`Queuing ${transformName}...`);
+      dispatchTransform(ids[0], transformName);
     } else {
-      window.runTransformMany(ids, transformName);
+      window.toast(`Queuing ${transformName} × ${ids.length}...`);
+      dispatchTransform(ids, transformName);
     }
   };
 
   window.runTransformMany = function (cyIds, transformName) {
     closeMenu();
+    if (needsGeneratorUI(transformName)) {
+      openGenModal(cyIds, transformName);
+      return;
+    }
     window.toast(`Queuing ${transformName} × ${cyIds.length}...`);
-    window.csrfFetch(`${api}/run-transform`, {
-      method: 'POST',
-      body: JSON.stringify(transformPayload({ source_cy_ids: cyIds, transform: transformName })),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (!data.ok) { window.toast('Error: ' + (data.error || 'unknown'), 'danger'); return; }
-        pollJob(data.job_id);
-      });
+    dispatchTransform(cyIds, transformName);
   };
 
   window.runTemplate = function (templateId) {

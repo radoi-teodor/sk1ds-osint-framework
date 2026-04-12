@@ -147,6 +147,27 @@ def run(node, api_keys):
     )]</pre>
 <p>This pattern lets you chain: <code>Snusbase email search → email node (with full record) → extract hash → hash node → hash reverse → password</code>.</p>
 
+<h2>Generator + transform: directory bruteforce</h2>
+<p>Upload a wordlist to File Manager, then use it with a transform via a generator:</p>
+<pre>from osint_engine.sdk import transform, Node
+
+@transform(
+    name="web.feroxbuster",
+    requires_slave=True,
+    accepts_generator=True,
+    required_generators=["seclists", "custom_wordlist"],
+    input_types=["domain", "url"],
+    output_types=["url"],
+    timeout=600,
+)
+def run(node, api_keys, slave, generator_output=None):
+    if not generator_output:
+        return [Node(type="note", value="no wordlist")]
+    slave.execute(f"printf '%s' '{generator_output}' > /tmp/wl.txt")
+    result = slave.execute(f"feroxbuster -u {node.value} -w /tmp/wl.txt -q")
+    return parse_output(result.stdout)</pre>
+<p>See the <a href="/docs/generators">Generators</a> page for the full SDK and built-in generators.</p>
+
 <h2>Third-party libraries</h2>
 <p>Add libraries to <code>osint-engine/pyproject.toml</code> under <code>[project.optional-dependencies] extras</code>, then <code>pip install -e .[extras]</code>. Pre-listed: <code>requests</code>, <code>dnspython</code>, <code>python-whois</code>, <code>beautifulsoup4</code>.</p>
 <pre># pyproject.toml

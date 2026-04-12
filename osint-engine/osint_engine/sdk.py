@@ -74,6 +74,8 @@ class TransformSpec:
     timeout: int
     author: str
     requires_slave: bool = False
+    accepts_generator: bool = False
+    required_generators: list[str] = field(default_factory=list)
     func: Callable | None = None
     source_file: str | None = None
 
@@ -87,6 +89,8 @@ class TransformSpec:
             "output_types": self.output_types,
             "required_api_keys": self.required_api_keys,
             "requires_slave": self.requires_slave,
+            "accepts_generator": self.accepts_generator,
+            "required_generators": self.required_generators,
             "timeout": self.timeout,
             "author": self.author,
             "source_file": self.source_file,
@@ -106,14 +110,18 @@ def transform(
     output_types: list[str] | None = None,
     required_api_keys: list[str] | None = None,
     requires_slave: bool = False,
+    accepts_generator: bool = False,
+    required_generators: list[str] | None = None,
     timeout: int = 30,
     author: str = "",
 ):
     """Decorator: register a function as a transformation.
 
     input_types may contain "*" to match any node type.
-    If requires_slave is True, the transform function receives a third
-    argument: a SlaveClient instance.
+    If requires_slave is True, the transform function receives a SlaveClient
+    as its third positional argument.
+    If accepts_generator is True, the function may receive generator_output
+    as a keyword argument.
     """
 
     def decorator(func: Callable) -> Callable:
@@ -126,6 +134,8 @@ def transform(
             output_types=list(output_types or []),
             required_api_keys=list(required_api_keys or []),
             requires_slave=requires_slave,
+            accepts_generator=accepts_generator,
+            required_generators=list(required_generators or []),
             timeout=timeout,
             author=author,
             func=func,

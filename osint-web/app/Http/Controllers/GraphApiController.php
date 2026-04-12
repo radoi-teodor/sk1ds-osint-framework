@@ -132,6 +132,9 @@ class GraphApiController extends Controller
             'source_cy_ids.*' => ['string'],
             'transform' => ['required', 'string'],
             'slave_id' => ['nullable', 'integer', 'exists:slaves,id'],
+            'generator_name' => ['nullable', 'string'],
+            'generator_file_id' => ['nullable', 'integer', 'exists:uploaded_files,id'],
+            'generator_text_input' => ['nullable', 'string'],
         ]);
 
         $cyIds = $payload['source_cy_ids'] ?? [$payload['source_cy_id']];
@@ -146,6 +149,9 @@ class GraphApiController extends Controller
             'kind' => InvestigationJob::KIND_TRANSFORM,
             'transform_name' => $payload['transform'],
             'slave_id' => $payload['slave_id'] ?? null,
+            'generator_name' => $payload['generator_name'] ?? null,
+            'generator_file_id' => $payload['generator_file_id'] ?? null,
+            'generator_text_input' => $payload['generator_text_input'] ?? null,
             'source_cy_ids' => array_values($exists),
             'status' => InvestigationJob::STATUS_QUEUED,
             'progress_total' => count($exists),

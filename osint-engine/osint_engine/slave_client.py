@@ -78,11 +78,11 @@ class SlaveClient:
     def is_embedded(self) -> bool:
         return self._config.type == "embedded"
 
-    def execute(self, command: str, timeout: int = 30) -> CommandResult:
-        parts = validate_command(command)
+    def execute(self, command: str, timeout: int = 30, stdin_data: str | None = None) -> CommandResult:
+        validate_command(command)
         if self.is_embedded:
-            return self._run_local(parts, timeout)
-        return self._run_ssh(command, timeout)
+            return self._run_local(command, timeout, stdin_data)
+        return self._run_ssh(command, timeout, stdin_data)
 
     def _connect_ssh(self):
         if self._ssh is not None:
@@ -120,29 +120,33 @@ class SlaveClient:
         client.connect(**connect_kw)
         self._ssh = client
 
-    def _run_ssh(self, command: str, timeout: int) -> CommandResult:
+    def _run_ssh(self, command: str, timeout: int, stdin_data: str | None = None) -> CommandResult:
         self._connect_ssh()
         assert self._ssh is not None
-        _, stdout_ch, stderr_ch = self._ssh.exec_command(command, timeout=timeout)
+        stdin_ch, stdout_ch, stderr_ch = self._ssh.exec_command(command, timeout=timeout)
+        if stdin_data is not None:
+            stdin_ch.write(stdin_data.encode("utf-8"))
+            stdin_ch.channel.shutdown_write()
         exit_code = stdout_ch.channel.recv_exit_status()
         stdout = stdout_ch.read().decode("utf-8", errors="replace")
         stderr = stderr_ch.read().decode("utf-8", errors="replace")
         return CommandResult(stdout=stdout, stderr=stderr, exit_code=exit_code)
 
-    def _run_local(self, parts: list[str], timeout: int) -> CommandResult:
+    def _run_local(self, command: str, timeout: int, stdin_data: str | None = None) -> CommandResult:
         try:
             proc = subprocess.run(
-                parts,
+                command,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
-                shell=False,
+                shell=True,
+                input=stdin_data,
             )
             return CommandResult(stdout=proc.stdout, stderr=proc.stderr, exit_code=proc.returncode)
         except subprocess.TimeoutExpired:
             return CommandResult(stdout="", stderr="command timed out", exit_code=-1)
         except FileNotFoundError:
-            return CommandResult(stdout="", stderr=f"binary not found: {parts[0]}", exit_code=127)
+            return CommandResult(stdout="", stderr=f"binary not found: {command.split()[0]}", exit_code=127)
 
     def close(self):
         if self._ssh is not None:

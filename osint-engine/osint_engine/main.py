@@ -15,11 +15,15 @@ from osint_engine.config import settings
 from osint_engine.loader import LOAD_ERRORS, load_transforms
 from osint_engine.runner import run_transform
 from osint_engine.sdk import Node, get_registry
+from osint_engine.generator_loader import GENERATOR_LOAD_ERRORS, load_generators
+from osint_engine.generator_runner import run_generator as run_gen
+from osint_engine.generator_sdk import GeneratorInputs, get_generator_registry
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     load_transforms(settings.transforms_dir)
+    load_generators(settings.generators_dir)
     yield
 
 
@@ -48,6 +52,12 @@ class RunRequest(BaseModel):
     node: NodePayload
     api_keys: dict[str, str] = Field(default_factory=dict)
     slave: SlavePayload | None = None
+    generator_output: str | None = None
+
+
+class GeneratorRunRequest(BaseModel):
+    files: list[str] = Field(default_factory=list)
+    text: str | None = None
 
 
 class TestSlaveRequest(BaseModel):
@@ -108,7 +118,7 @@ async def run_transform_endpoint(name: str, req: RunRequest) -> dict[str, Any]:
         data=req.node.data or {},
     )
     slave_dict = req.slave.model_dump() if req.slave else None
-    return await run_transform(spec, node, req.api_keys, slave_config=slave_dict)
+    return await run_transform(spec, node, req.api_keys, slave_config=slave_dict, generator_output=req.generator_output)
 
 
 @app.post("/slaves/test", dependencies=[Depends(verify_secret)])
@@ -205,6 +215,82 @@ async def validate(body: ValidateRequest) -> dict[str, Any]:
     except SyntaxError as e:
         return {"valid": False, "error": f"Line {e.lineno}: {e.msg}"}
     return {"valid": True}
+
+
+# ========== generator endpoints ==========
+
+@app.get("/generators", dependencies=[Depends(verify_secret)])
+async def list_generators() -> dict[str, Any]:
+    return {
+        "generators": [spec.to_dict() for spec in get_generator_registry().values()],
+        "load_errors": GENERATOR_LOAD_ERRORS,
+    }
+
+
+@app.post("/generators/{name}/run", dependencies=[Depends(verify_secret)])
+async def run_generator_endpoint(name: str, req: GeneratorRunRequest) -> dict[str, Any]:
+    registry = get_generator_registry()
+    spec = registry.get(name)
+    if spec is None:
+        raise HTTPException(404, f"Unknown generator: {name}")
+    inputs = GeneratorInputs(text=req.text, files=req.files or [])
+    return await run_gen(spec, inputs)
+
+
+@app.post("/generators/reload", dependencies=[Depends(verify_secret)])
+async def reload_generators() -> dict[str, Any]:
+    load_generators(settings.generators_dir)
+    return {"status": "ok", "generators": len(get_generator_registry()), "load_errors": GENERATOR_LOAD_ERRORS}
+
+
+@app.get("/generators/{name}/source", dependencies=[Depends(verify_secret)])
+async def get_generator_source(name: str) -> dict[str, Any]:
+    spec = get_generator_registry().get(name)
+    if spec is None or not spec.source_file:
+        raise HTTPException(404, "Generator or source file not found")
+    path = Path(spec.source_file)
+    return {"name": name, "filename": path.name, "source": path.read_text(encoding="utf-8")}
+
+
+@app.put("/generators/{name}/source", dependencies=[Depends(verify_secret)])
+async def update_generator_source(name: str, body: SourceUpdate) -> dict[str, Any]:
+    spec = get_generator_registry().get(name)
+    if spec is None or not spec.source_file:
+        raise HTTPException(404, "Generator or source file not found")
+    try:
+        compile(body.source, spec.source_file, "exec")
+    except SyntaxError as e:
+        raise HTTPException(400, f"SyntaxError line {e.lineno}: {e.msg}")
+    Path(spec.source_file).write_text(body.source, encoding="utf-8")
+    load_generators(settings.generators_dir)
+    return {"status": "ok", "load_errors": GENERATOR_LOAD_ERRORS}
+
+
+@app.post("/generators", dependencies=[Depends(verify_secret)])
+async def create_generator_file(body: CreateTransform) -> dict[str, Any]:
+    if not _FILENAME_RE.match(body.filename):
+        raise HTTPException(400, "Invalid filename")
+    try:
+        compile(body.source, body.filename, "exec")
+    except SyntaxError as e:
+        raise HTTPException(400, f"SyntaxError line {e.lineno}: {e.msg}")
+    target = settings.generators_dir / body.filename
+    if target.exists():
+        raise HTTPException(409, "File already exists")
+    settings.generators_dir.mkdir(parents=True, exist_ok=True)
+    target.write_text(body.source, encoding="utf-8")
+    load_generators(settings.generators_dir)
+    return {"status": "ok", "filename": body.filename}
+
+
+@app.delete("/generators/{name}", dependencies=[Depends(verify_secret)])
+async def delete_generator_file(name: str) -> dict[str, Any]:
+    spec = get_generator_registry().get(name)
+    if spec is None or not spec.source_file:
+        raise HTTPException(404, "Generator or source file not found")
+    Path(spec.source_file).unlink(missing_ok=True)
+    load_generators(settings.generators_dir)
+    return {"status": "ok"}
 
 
 def main() -> None:

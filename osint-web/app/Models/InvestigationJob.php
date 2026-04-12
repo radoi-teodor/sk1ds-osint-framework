@@ -18,7 +18,8 @@ class InvestigationJob extends Model
 
     protected $fillable = [
         'graph_id', 'user_id', 'kind', 'transform_name', 'template_id',
-        'slave_id', 'source_cy_ids', 'status', 'progress_done', 'progress_total',
+        'slave_id', 'generator_name', 'generator_file_id', 'generator_text_input',
+        'generator_output', 'source_cy_ids', 'status', 'progress_done', 'progress_total',
         'created_nodes', 'created_edges', 'error', 'started_at', 'finished_at',
     ];
 

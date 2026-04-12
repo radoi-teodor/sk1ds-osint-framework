@@ -59,7 +59,7 @@ def run(node, api_keys, slave):
         </tr>
         <tr>
             <td><code>timeout</code></td><td>int</td><td>no</td><td><code>30</code></td>
-            <td>Maximum seconds the function may run before being killed. Applies per invocation (if run on multiple nodes, each gets its own timeout).</td>
+            <td>Maximum seconds the function may run before being killed. Applies per invocation (if run on multiple nodes, each gets its own timeout). The platform also uses this value to set the HTTP request timeout between Laravel and the engine (<code>timeout + 30s</code>), so set it generously for slow transforms like nmap or feroxbuster.</td>
         </tr>
         <tr>
             <td><code>author</code></td><td>str</td><td>no</td><td><code>""</code></td>

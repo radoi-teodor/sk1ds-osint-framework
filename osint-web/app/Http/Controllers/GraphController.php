@@ -27,12 +27,19 @@ class GraphController extends Controller
         $templates = Graph::where('type', Graph::TYPE_TEMPLATE)->orderBy('title')->get(['id', 'title']);
         $slaves = Slave::orderBy('name')->get(['id', 'name', 'type']);
 
+        $generators = [];
+        $genResp = $engine->listGenerators();
+        if ($genResp['ok']) {
+            $generators = $genResp['data']['generators'] ?? [];
+        }
+
         return view('graphs.show', [
             'graph' => $graph,
             'transforms' => $transforms,
             'engineError' => $engineError,
             'templates' => $templates,
             'slaves' => $slaves,
+            'generators' => $generators,
         ]);
     }
 

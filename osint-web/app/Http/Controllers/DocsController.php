@@ -8,6 +8,7 @@ class DocsController extends Controller
         'getting-started' => ['title' => 'Getting Started', 'icon' => '▸'],
         'decorator' => ['title' => '@transform Decorator', 'icon' => '@'],
         'node-edge' => ['title' => 'Node & Edge', 'icon' => '◉'],
+        'generators' => ['title' => 'Generators', 'icon' => '⚙'],
         'slave' => ['title' => 'SlaveClient (SSH)', 'icon' => '🖥'],
         'api-keys' => ['title' => 'API Keys', 'icon' => '🔑'],
         'entity-types' => ['title' => 'Entity Types', 'icon' => '◆'],
