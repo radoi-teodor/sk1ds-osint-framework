@@ -22,34 +22,54 @@
     </div>
 @endif
 
+@php
+    $grouped = collect($transforms)->groupBy(fn ($t) => $t['category'] ?? 'other')->sortKeys();
+@endphp
+
 <div class="panel">
-    <div class="panel-title">Registered transforms</div>
+    <div class="panel-title">Registered transforms <span class="text-dim">({{ count($transforms) }})</span></div>
     @if(empty($transforms))
         <p class="text-dim">None registered.</p>
     @else
-    <table class="data">
-        <thead>
-        <tr>
-            <th>Name</th><th>Display</th><th>Category</th>
-            <th>In</th><th>Out</th><th>Keys</th><th></th>
-        </tr>
-        </thead>
-        <tbody>
-        @foreach($transforms as $t)
-            <tr>
-                <td class="mono">{{ $t['name'] }}</td>
-                <td>{{ $t['display_name'] ?? '' }}</td>
-                <td>{{ $t['category'] ?? '' }}</td>
-                <td class="small">{{ implode(', ', $t['input_types'] ?? []) }}</td>
-                <td class="small">{{ implode(', ', $t['output_types'] ?? []) }}</td>
-                <td class="small">{{ implode(', ', $t['required_api_keys'] ?? []) }}</td>
-                <td>
-                    <a href="/transformations/{{ $t['name'] }}/edit" class="btn ghost">EDIT</a>
-                </td>
-            </tr>
+        <div class="transform-groups">
+        @foreach($grouped as $category => $items)
+            <details class="transform-group">
+                <summary>
+                    <span class="cat-name">{{ $category }}</span>
+                    <span class="cat-count">{{ count($items) }}</span>
+                </summary>
+                <table class="data" style="margin:0;">
+                    <thead>
+                    <tr>
+                        <th>Name</th><th>Display</th>
+                        <th>In</th><th>Out</th><th>Reqs</th><th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach($items as $t)
+                        <tr>
+                            <td class="mono">{{ $t['name'] }}</td>
+                            <td>{{ $t['display_name'] ?? '' }}</td>
+                            <td class="small">{{ implode(', ', $t['input_types'] ?? []) }}</td>
+                            <td class="small">{{ implode(', ', $t['output_types'] ?? []) }}</td>
+                            <td class="small">
+                                @if(!empty($t['required_api_keys']))
+                                    🔑 {{ implode(', ', $t['required_api_keys']) }}
+                                @endif
+                                @if(!empty($t['requires_slave']))
+                                    🖥 slave
+                                @endif
+                            </td>
+                            <td>
+                                <a href="/transformations/{{ $t['name'] }}/edit" class="btn ghost">EDIT</a>
+                            </td>
+                        </tr>
+                    @endforeach
+                    </tbody>
+                </table>
+            </details>
         @endforeach
-        </tbody>
-    </table>
+        </div>
     @endif
 </div>
 @endsection

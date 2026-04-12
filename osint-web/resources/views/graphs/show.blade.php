@@ -40,7 +40,7 @@
 
         <div class="transform-groups">
             @forelse($grouped as $category => $items)
-                <details class="transform-group" open>
+                <details class="transform-group">
                     <summary>
                         <span class="cat-name">{{ $category }}</span>
                         <span class="cat-count">{{ count($items) }}</span>
