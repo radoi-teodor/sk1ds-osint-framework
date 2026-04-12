@@ -197,8 +197,8 @@ class TemplateRunner
                             'value' => (string) ($n['value'] ?? ''),
                             'label' => $n['label'] ?? ($n['value'] ?? ''),
                             'data' => $n['data'] ?? [],
-                            'position_x' => ($parentNode->position_x ?? 0) + 220 + ($j * 15),
-                            'position_y' => ($parentNode->position_y ?? 0) + ($j * 80) - 160,
+                            'position_x' => ($parentNode->position_x ?? 0) + 80 + ($j * 6),
+                            'position_y' => ($parentNode->position_y ?? 0) + ($j * 35) - 60,
                             'created_by' => $userId,
                         ]);
                         $edge = $investigation->edges()->create([

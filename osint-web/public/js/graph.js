@@ -16,52 +16,81 @@
   const api = cfg.apiBase;
 
   // ---------- style ----------
-  const nodeStyle = {
-    'background-color': (ele) => styleFor(ele.data('entity_type')).color,
-    'border-color': (ele) => styleFor(ele.data('entity_type')).color,
-    'border-width': 2,
-    'shape': (ele) => styleFor(ele.data('entity_type')).shape || 'round-rectangle',
-    'label': 'data(displayLabel)',
-    'color': '#e8ffe5',
-    'font-family': 'JetBrains Mono, Consolas, monospace',
-    'font-size': 11,
-    'text-valign': 'bottom',
-    'text-margin-y': 6,
-    'text-outline-color': '#000',
-    'text-outline-width': 2,
-    'text-wrap': 'ellipsis',
-    'text-max-width': 160,
-    'width': 46,
-    'height': 46,
-  };
-
+  // PERF: all style properties are either static or use data() references.
+  // Zero function-based mappers → Cytoscape caches everything, no JS calls per frame.
   function styleFor(t) {
     return (cfg.entityTypes && cfg.entityTypes[t]) || cfg.entityTypes.unknown || { color: '#888', shape: 'round-rectangle', icon: '?', label: 'Unknown' };
   }
 
+  // PERF: labels hidden by default — only shown on hover (.show-label) or selection.
+  // This is the #1 optimization: text rendering is by far the most expensive part.
+  const _labelStyle = {
+    'label': 'data(displayLabel)',
+    'color': '#e8ffe5',
+    'font-family': 'JetBrains Mono, Consolas, monospace',
+    'font-size': 10,
+    'text-valign': 'bottom',
+    'text-margin-y': 4,
+    'text-outline-color': '#000',
+    'text-outline-width': 1,
+    'text-wrap': 'ellipsis',
+    'text-max-width': 130,
+    'text-events': 'no',
+  };
+
   const cy = cytoscape({
     container: document.getElementById('cy'),
     wheelSensitivity: 0.25,
-    textureOnViewport: true,
     hideEdgesOnViewport: true,
     motionBlur: false,
     pixelRatio: 1,
+    textureOnViewport: false,
     style: [
-      { selector: 'node', style: nodeStyle },
-      { selector: 'node:selected', style: { 'border-color': '#fff', 'border-width': 3, 'overlay-color': '#00ff9c', 'overlay-opacity': 0.18 } },
-      { selector: 'node[entity_type = "template:input"]', style: { 'background-color': '#ffb000', 'border-color': '#ffb000', 'shape': 'round-diamond', 'width': 56, 'height': 56 } },
-      { selector: 'node[entity_type = "template:transform"]', style: { 'background-color': '#1d2620', 'border-color': '#00ff9c', 'shape': 'round-tag', 'width': 72, 'height': 38 } },
+      { selector: 'node', style: {
+        'background-color': 'data(nodeColor)',
+        'border-color': 'data(nodeColor)',
+        'border-width': 1.5,
+        'shape': 'data(nodeShape)',
+        'label': '',
+        'width': 28,
+        'height': 28,
+        'overlay-padding': 3,
+        'text-events': 'no',
+      }},
+      { selector: 'node.show-label', style: _labelStyle },
+      { selector: 'node:selected', style: {
+        ..._labelStyle,
+        'border-color': '#fff',
+        'border-width': 2.5,
+        'width': 34,
+        'height': 34,
+        'overlay-color': '#00ff9c',
+        'overlay-opacity': 0.12,
+      }},
+      { selector: 'node[entity_type = "template:input"]', style: {
+        ..._labelStyle,
+        'background-color': '#ffb000', 'border-color': '#ffb000', 'shape': 'round-diamond', 'width': 44, 'height': 44,
+      }},
+      { selector: 'node[entity_type = "template:transform"]', style: {
+        ..._labelStyle,
+        'background-color': '#1d2620', 'border-color': '#00ff9c', 'shape': 'round-tag', 'width': 60, 'height': 30,
+      }},
       { selector: 'edge', style: {
-          'curve-style': 'bezier',
-          'width': 1.5,
+          'curve-style': 'haystack',
+          'haystack-radius': 0.4,
+          'width': 1,
           'line-color': '#3c5242',
-          'target-arrow-color': '#3c5242',
-          'target-arrow-shape': 'triangle',
-          'opacity': 0.85,
+          'opacity': 0.65,
         } },
-      { selector: 'edge:selected', style: { 'line-color': '#00ff9c', 'target-arrow-color': '#00ff9c', 'width': 2.5 } },
+      { selector: 'edge:selected', style: { 'line-color': '#00ff9c', 'width': 2 } },
     ],
     layout: { name: 'preset' },
+  });
+
+  // Show label on hover (only for the one node under cursor — cheap).
+  cy.on('mouseover', 'node', (evt) => evt.target.addClass('show-label'));
+  cy.on('mouseout', 'node', (evt) => {
+    if (!evt.target.selected()) evt.target.removeClass('show-label');
   });
 
   // ---------- load graph ----------
@@ -87,10 +116,10 @@
   }
 
   function nodeData(n) {
-    const iconStyle = styleFor(n.entity_type);
+    const s = styleFor(n.entity_type);
     let display = n.label || n.value || n.cy_id;
     if (display.length > 30) display = display.slice(0, 27) + '...';
-    display = (iconStyle.icon || '') + ' ' + display;
+    display = (s.icon || '') + ' ' + display;
     return {
       id: n.cy_id,
       entity_type: n.entity_type,
@@ -98,29 +127,143 @@
       raw_label: n.label,
       displayLabel: display,
       payload: n.data || {},
+      nodeColor: s.color,
+      nodeShape: s.shape || 'round-rectangle',
     };
   }
 
   // ---------- node selection & sidebar ----------
   const detailBox = document.getElementById('selected-node');
+
+  function clearDetail() {
+    if (detailBox) detailBox.innerHTML = '<div class="text-dim small">Click a node to inspect.</div>';
+  }
+
   cy.on('tap', 'node', (evt) => {
     const n = evt.target;
     showDetail(n);
   });
   cy.on('tap', (evt) => {
-    if (evt.target === cy) closeMenu();
+    if (evt.target === cy) { closeMenu(); clearDetail(); }
   });
 
   function showDetail(n) {
     if (!detailBox) return;
     const d = n.data();
-    detailBox.innerHTML = `
-      <div class="field"><div class="label">Type</div><div class="value">${esc(d.entity_type)}</div></div>
-      <div class="field"><div class="label">Value</div><div class="value">${esc(d.value || '')}</div></div>
-      <div class="field"><div class="label">Cy ID</div><div class="value small">${esc(d.id)}</div></div>
-      <div class="field"><button class="btn ghost" onclick="window.graphDeleteNode('${d.id}')">DELETE</button></div>
-    `;
+    const payload = d.payload || {};
+    const rawLabel = d.raw_label || '';
+
+    let html = '';
+    html += `<div class="field"><div class="label">Type</div><div class="value">${esc(d.entity_type)}</div></div>`;
+    html += `<div class="field"><div class="label">Value</div><div class="value">${esc(d.value || '')}</div></div>`;
+    if (rawLabel && rawLabel !== d.value) {
+      html += `<div class="field"><div class="label">Label</div><div class="value">${esc(rawLabel)}</div></div>`;
+    }
+
+    // Render every data.* key the transform put in
+    const keys = Object.keys(payload || {});
+    if (keys.length) {
+      html += `<hr style="margin:10px 0;border:none;border-top:1px dashed var(--border)">`;
+      html += `<div class="label" style="margin-bottom:6px;">Data</div>`;
+      for (const k of keys) {
+        const v = payload[k];
+        let rendered;
+        if (v === null || v === undefined) {
+          rendered = '<span class="text-dim">null</span>';
+        } else if (typeof v === 'object') {
+          rendered = `<pre class="small" style="margin:0;white-space:pre-wrap;word-break:break-all;">${esc(JSON.stringify(v, null, 2))}</pre>`;
+        } else {
+          rendered = esc(String(v));
+        }
+        html += `<div class="field"><div class="label">${esc(k)}</div><div class="value">${rendered}</div></div>`;
+      }
+    }
+
+    html += `<hr style="margin:10px 0;border:none;border-top:1px dashed var(--border)">`;
+    html += `<div class="field"><div class="label">Cy ID</div><div class="value small mono">${esc(d.id)}</div></div>`;
+    html += `<div class="field"><button class="btn ghost danger w-full" onclick="window.graphDeleteNode('${esc(d.id)}')">DELETE NODE</button></div>`;
+
+    detailBox.innerHTML = html;
   }
+
+  // ---------- box-select mode ----------
+  let selectMode = false;
+  const selectBtn = document.getElementById('select-toggle');
+  const cyEl = document.getElementById('cy');
+
+  function setSelectMode(on) {
+    selectMode = !!on;
+    // Disable Cytoscape's built-in pan so left-click-drag on background is free
+    // for our manual box selection.
+    cy.userPanningEnabled(!selectMode);
+    if (selectBtn) {
+      selectBtn.classList.toggle('active', selectMode);
+      selectBtn.textContent = selectMode ? '✕ select' : '▢ select';
+    }
+    if (cyEl) cyEl.classList.toggle('select-mode', selectMode);
+  }
+  window.toggleSelectMode = () => setSelectMode(!selectMode);
+
+  // Manual rubber-band box selection — runs only when selectMode is on.
+  cy.on('mousedown', (evt) => {
+    if (!selectMode) return;
+    if (evt.target !== cy) return;              // clicked on a node/edge, let Cytoscape handle it
+    const orig = evt.originalEvent;
+    if (!orig || orig.button !== 0) return;     // only left button
+    orig.preventDefault();
+
+    const additive = orig.shiftKey || orig.ctrlKey || orig.metaKey;
+    if (!additive) cy.$('node:selected').unselect();
+
+    const startX = orig.clientX;
+    const startY = orig.clientY;
+    const box = document.createElement('div');
+    box.style.cssText = [
+      'position:fixed',
+      'left:' + startX + 'px',
+      'top:' + startY + 'px',
+      'width:0',
+      'height:0',
+      'border:1px dashed var(--accent)',
+      'background:var(--accent-soft)',
+      'pointer-events:none',
+      'z-index:9999',
+    ].join(';');
+    document.body.appendChild(box);
+
+    function move(ev) {
+      const x1 = Math.min(startX, ev.clientX);
+      const y1 = Math.min(startY, ev.clientY);
+      const w = Math.abs(ev.clientX - startX);
+      const h = Math.abs(ev.clientY - startY);
+      box.style.left = x1 + 'px';
+      box.style.top = y1 + 'px';
+      box.style.width = w + 'px';
+      box.style.height = h + 'px';
+    }
+    function up(ev) {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+      const rect = box.getBoundingClientRect();
+      box.remove();
+
+      // Convert viewport rect → Cytoscape model coordinates
+      const cyRect = cyEl.getBoundingClientRect();
+      const zoom = cy.zoom();
+      const pan = cy.pan();
+      const mx1 = (rect.left - cyRect.left - pan.x) / zoom;
+      const my1 = (rect.top - cyRect.top - pan.y) / zoom;
+      const mx2 = (rect.right - cyRect.left - pan.x) / zoom;
+      const my2 = (rect.bottom - cyRect.top - pan.y) / zoom;
+
+      cy.nodes().forEach((n) => {
+        const p = n.position();
+        if (p.x >= mx1 && p.x <= mx2 && p.y >= my1 && p.y <= my2) n.select();
+      });
+    }
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+  });
 
   // ---------- presentation mode ----------
   const PRESENT_KEY = `osint.present.${cfg.graphId}`;
@@ -240,25 +383,42 @@
     return html;
   }
 
-  // ---------- position persistence ----------
+  // ---------- position persistence (batched, throttled) ----------
   const pendingPositions = new Map();
   let saveTimer = null;
   cy.on('dragfree', 'node', (evt) => {
     const n = evt.target;
     pendingPositions.set(n.data('id'), n.position());
     if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(flushPositions, 400);
+    // Longer debounce when many nodes are moving (less network chatter)
+    saveTimer = setTimeout(flushPositions, pendingPositions.size > 5 ? 1200 : 600);
   });
 
+  let flushing = false;
   function flushPositions() {
-    for (const [id, pos] of pendingPositions.entries()) {
-      window.csrfFetch(`${api}/nodes/${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: JSON.stringify({ position_x: pos.x, position_y: pos.y }),
-      }).catch(() => {});
-    }
+    if (flushing || pendingPositions.size === 0) return;
+    flushing = true;
+    const batch = Array.from(pendingPositions.entries());
     pendingPositions.clear();
-    drawMinimap();
+    // fire at most 10 concurrent PATCHes, queue the rest
+    const chunks = [];
+    for (let i = 0; i < batch.length; i += 10) chunks.push(batch.slice(i, i + 10));
+    (async () => {
+      for (const chunk of chunks) {
+        await Promise.allSettled(
+          chunk.map(([id, pos]) =>
+            window.csrfFetch(`${api}/nodes/${encodeURIComponent(id)}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ position_x: pos.x, position_y: pos.y }),
+            }).catch(() => {})
+          )
+        );
+      }
+      flushing = false;
+      drawMinimap();
+      // If more came in while we were flushing, do another round
+      if (pendingPositions.size > 0) flushPositions();
+    })();
   }
 
   // ---------- actions exposed globally ----------
@@ -268,7 +428,7 @@
     if (!confirm('Delete this node?')) return;
     window.csrfFetch(`${api}/nodes/${encodeURIComponent(cyId)}`, { method: 'DELETE' })
       .then((r) => r.json())
-      .then(() => { cy.getElementById(cyId).remove(); closeMenu(); drawMinimap(); })
+      .then(() => { cy.getElementById(cyId).remove(); closeMenu(); clearDetail(); drawMinimap(); })
       .catch(() => window.toast('Delete failed', 'danger'));
   };
 
@@ -367,6 +527,20 @@
         pollJob(data.job_id);
       })
       .catch((e) => window.toast('Network error: ' + e.message, 'danger'));
+  };
+
+  window.sidebarRunTransform = function (transformName) {
+    const sel = cy.$('node:selected');
+    if (sel.length === 0) {
+      window.toast('Select one or more nodes first', 'warn');
+      return;
+    }
+    const ids = sel.map((n) => n.data('id'));
+    if (ids.length === 1) {
+      window.runTransform(ids[0], transformName);
+    } else {
+      window.runTransformMany(ids, transformName);
+    }
   };
 
   window.runTransformMany = function (cyIds, transformName) {
@@ -629,7 +803,12 @@
     miniRect.style.height = (hh / devicePixelRatio) + 'px';
   }
 
-  cy.on('viewport', drawViewport);
+  // Throttle viewport redraw — full minimap repaint is heavy on large graphs.
+  let vpTimer = null;
+  cy.on('viewport', () => {
+    if (vpTimer) return;
+    vpTimer = requestAnimationFrame(() => { drawViewport(); vpTimer = null; });
+  });
 
   // Minimap: click + drag to move the viewport.
   if (miniCanvas) {
@@ -668,8 +847,21 @@
 
   window.graphFit = function () { cy.fit(undefined, 40); drawMinimap(); };
   window.graphLayout = function () {
-    cy.layout({ name: 'cose', animate: true, animationDuration: 400, nodeRepulsion: 40000, idealEdgeLength: 120 }).run();
-    setTimeout(drawMinimap, 500);
+    const n = cy.nodes().length;
+    cy.layout({
+      name: 'cose',
+      animate: n < 500,
+      animationDuration: 300,
+      nodeRepulsion: function () { return n > 200 ? 2000 : 5000; },
+      idealEdgeLength: function () { return n > 200 ? 30 : 50; },
+      edgeElasticity: function () { return n > 200 ? 50 : 100; },
+      gravity: n > 200 ? 1.2 : 0.6,
+      numIter: n > 500 ? 100 : 300,
+      nodeDimensionsIncludeLabels: false,
+      fit: true,
+      padding: 30,
+    }).run();
+    setTimeout(drawMinimap, n < 500 ? 400 : 50);
   };
 
   // ---------- transforms palette filter ----------
@@ -715,6 +907,41 @@
     });
   }
 
+  // ---------- bulk delete ----------
+  function deleteSelected() {
+    const selected = cy.$('node:selected');
+    if (selected.length === 0) return;
+    const ids = selected.map((n) => n.data('id'));
+    const confirmMsg = ids.length === 1
+      ? 'Delete this node?'
+      : `Delete ${ids.length} nodes?`;
+    if (!confirm(confirmMsg)) return;
+
+    // optimistic UI: remove immediately, rollback on failure
+    const removed = selected.remove();
+    clearDetail();
+    window.toast(`Deleting ${ids.length}...`);
+
+    Promise.allSettled(
+      ids.map((id) =>
+        window.csrfFetch(`${api}/nodes/${encodeURIComponent(id)}`, { method: 'DELETE' })
+          .then((r) => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+      )
+    ).then((results) => {
+      const failed = results.filter((r) => r.status === 'rejected').length;
+      if (failed > 0) {
+        window.toast(`${failed} failed to delete — reloading`, 'danger');
+        load();
+      } else {
+        window.toast(`${ids.length} node(s) deleted`);
+      }
+      drawMinimap();
+    });
+  }
+
   // ---------- global keyboard shortcuts ----------
   document.addEventListener('keydown', (e) => {
     // ignore when typing in an input/textarea/contenteditable
@@ -723,14 +950,34 @@
 
     if (e.key === 'Escape') {
       closeMenu();
+      if (selectMode) setSelectMode(false);
       if (presentMode) setPresentMode(false);
       return;
     }
-    if (!typing && (e.key === 'p' || e.key === 'P')) {
+    if (typing) return;
+
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      deleteSelected();
+      return;
+    }
+    if (e.key === 's' || e.key === 'S') {
+      e.preventDefault();
+      window.toggleSelectMode();
+      return;
+    }
+    if (e.key === 'p' || e.key === 'P') {
       if (!isTemplate) {
         e.preventDefault();
         window.togglePresentMode();
       }
+      return;
+    }
+    // Ctrl/Cmd+A → select all nodes
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+      e.preventDefault();
+      cy.nodes().select();
+      return;
     }
   });
 

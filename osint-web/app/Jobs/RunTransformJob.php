@@ -143,8 +143,8 @@ class RunTransformJob implements ShouldQueue
                     'value' => (string) ($n['value'] ?? ''),
                     'label' => $n['label'] ?? ($n['value'] ?? ''),
                     'data' => $n['data'] ?? [],
-                    'position_x' => $source->position_x + 220 + ($i * 12),
-                    'position_y' => $source->position_y + ($i * 80) - 160,
+                    'position_x' => $source->position_x + 80 + ($i * 6),
+                    'position_y' => $source->position_y + ($i * 35) - 60,
                     'created_by' => $job->user_id,
                 ]);
                 $edge = $graph->edges()->create([

@@ -140,3 +140,133 @@ def test_domain_tld_twolevel():
     values = [n.value for n in result]
     assert "foo.co.uk" in values
     assert any("co.uk" in v for v in values)
+
+
+# ---- snusbase ----
+
+def test_snusbase_missing_key():
+    for name in ("snusbase.email", "snusbase.username", "snusbase.password",
+                 "snusbase.hash", "snusbase.lastip", "snusbase.name",
+                 "snusbase.domain", "snusbase.hash_reverse", "snusbase.ip_whois"):
+        result = _run(name, Node(type="email", value="alice@example.com"), {})
+        assert result
+        assert any("missing" in n.value.lower() for n in result), f"{name} missing-key path"
+
+
+def _snusbase_mod():
+    from osint_engine.loader import load_transforms
+    load_transforms(TRANSFORMS_DIR)
+    import sys
+    m = sys.modules.get("osint_transforms_snusbase")
+    assert m is not None
+    return m
+
+
+def test_snusbase_one_node_per_record():
+    mod = _snusbase_mod()
+    fake = {
+        "TestBreach_2020": [
+            {"email": "alice@example.com", "password": "hunter2", "username": "alice", "lastip": "1.2.3.4", "uid": "123"},
+            {"email": "alice@example.com", "password": "hunter2", "hash": "abc123", "salt": "s"},
+        ],
+        "AnotherLeak_2022": [
+            {"email": "alice@example.com", "password": "pass1", "name": "Alice Doe", "phone": "+1234"},
+        ],
+    }
+    nodes = mod._nodes_from_search(fake)
+    # 3 records total → 3 nodes (no dedup)
+    assert len(nodes) == 3
+    # All primary type = email because every record has an email field
+    assert all(n.type == "email" for n in nodes)
+    # No breach nodes produced
+    assert not any(n.type == "breach" for n in nodes)
+    # Each node carries the full source record
+    rec0 = nodes[0].data["record"]
+    assert rec0["password"] == "hunter2"
+    assert rec0["lastip"] == "1.2.3.4"
+    assert rec0["uid"] == "123"
+    assert nodes[0].data["breach"] == "TestBreach_2020"
+    # Label includes a short breach hint
+    assert "TestBreach_2020" in nodes[0].label
+    # Third record is from the other breach
+    assert nodes[2].data["breach"] == "AnotherLeak_2022"
+    assert nodes[2].data["record"]["name"] == "Alice Doe"
+
+
+def test_snusbase_primary_identity_fallback():
+    mod = _snusbase_mod()
+    # Record without email but with username
+    fake = {"B": [{"username": "avvd", "hash": "xyz"}]}
+    nodes = mod._nodes_from_search(fake)
+    assert len(nodes) == 1
+    assert nodes[0].type == "username"
+    assert nodes[0].value == "avvd"
+    assert nodes[0].data["record"]["hash"] == "xyz"
+
+
+def test_snusbase_primary_identity_ip_only():
+    mod = _snusbase_mod()
+    fake = {"B": [{"lastip": "8.8.8.8", "uid": "42"}]}
+    nodes = mod._nodes_from_search(fake)
+    assert len(nodes) == 1
+    assert nodes[0].type == "ipv4"
+    assert nodes[0].value == "8.8.8.8"
+
+
+def test_snusbase_empty_results():
+    mod = _snusbase_mod()
+    assert mod._nodes_from_search({}) == []
+    assert mod._nodes_from_search({"Empty": []}) == []
+
+
+def test_snusbase_extract_hash():
+    source = Node(
+        type="email",
+        value="alice@example.com",
+        label="alice@example.com",
+        data={
+            "breach": "TestBreach",
+            "record": {"email": "alice@example.com", "hash": "deadbeef", "password": "hunter2", "salt": "x"},
+        },
+    )
+    result = _run("snusbase.extract_hash", source)
+    assert len(result) == 1
+    assert result[0].type == "hash"
+    assert result[0].value == "deadbeef"
+    assert result[0].data["extracted_from_field"] == "hash"
+    assert result[0].data["record"]["password"] == "hunter2"  # record context preserved
+
+
+def test_snusbase_extract_password_missing():
+    source = Node(type="email", value="a@b.com", data={"breach": "B", "record": {"email": "a@b.com"}})
+    result = _run("snusbase.extract_password", source)
+    assert result[0].type == "note"
+    assert "no `password`" in result[0].value
+
+
+def test_snusbase_extract_without_record():
+    source = Node(type="email", value="a@b.com", data={})
+    result = _run("snusbase.extract_hash", source)
+    assert result[0].type == "note"
+    assert "no Snusbase record" in result[0].value
+
+
+def test_snusbase_extract_all():
+    rec = {
+        "email": "a@b.com", "username": "au", "password": "pw",
+        "hash": "hh", "lastip": "1.2.3.4", "name": "A B",
+        "phone": "+1234", "uid": "99",
+    }
+    source = Node(type="email", value="a@b.com", data={"breach": "B", "record": rec})
+    result = _run("snusbase.extract_all", source)
+    types = sorted({n.type for n in result})
+    # Known-typed fields
+    assert "email" in types
+    assert "username" in types
+    assert "password" in types
+    assert "hash" in types
+    assert "ipv4" in types
+    assert "person" in types
+    # Aux fields become notes
+    assert any(n.type == "note" and "phone" in n.value for n in result)
+    assert any(n.type == "note" and "uid" in n.value for n in result)

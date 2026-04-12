@@ -449,6 +449,13 @@ table.data tr:hover td { background: var(--accent-soft); }
   background: rgba(255, 176, 0, 0.12);
   box-shadow: 0 0 12px rgba(255, 176, 0, 0.25);
 }
+#select-toggle.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 10px var(--accent-soft);
+}
+#cy.select-mode { cursor: crosshair !important; }
 .present-banner {
   position: absolute;
   top: 14px;

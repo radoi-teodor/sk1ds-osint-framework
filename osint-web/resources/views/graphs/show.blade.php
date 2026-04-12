@@ -56,7 +56,12 @@
                                  data-name="{{ $t['name'] }}"
                                  data-search="{{ $search }}"
                                  title="{{ $t['description'] ?? '' }}"
-                                 @if($graph->isTemplate()) onclick="templateAddTransform('{{ $t['name'] }}')" @endif>
+                                 @if($graph->isTemplate())
+                                     onclick="templateAddTransform('{{ $t['name'] }}')"
+                                 @else
+                                     onclick="sidebarRunTransform('{{ $t['name'] }}')"
+                                     style="cursor:pointer"
+                                 @endif>
                                 <div class="name">{{ $t['display_name'] ?? $t['name'] }}</div>
                                 <div class="desc">
                                     <span class="io">in:</span> {{ implode(',', $t['input_types'] ?? []) }}
@@ -85,6 +90,7 @@
                 <button class="ghost" onclick="graphAddNode()">+ node</button>
                 <button class="ghost" id="present-toggle" onclick="togglePresentMode()" title="Toggle presentation mode (P)">▶ present</button>
             @endunless
+            <button class="ghost" id="select-toggle" onclick="toggleSelectMode()" title="Box-select mode (S)">▢ select</button>
             <button class="ghost" onclick="graphFit()">fit</button>
             <button class="ghost" onclick="graphLayout()">layout</button>
             <button class="ghost" onclick="graphReload()">reload</button>
