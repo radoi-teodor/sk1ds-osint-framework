@@ -115,6 +115,14 @@ class EngineClient
         ]));
     }
 
+    public function runScript(array $slavePayload, string $script): array
+    {
+        return $this->wrap(fn () => $this->http()->timeout(330)->post('/slaves/run-script', [
+            'slave' => $slavePayload,
+            'script' => $script,
+        ]));
+    }
+
     public function getSource(string $name): array
     {
         return $this->wrap(fn () => $this->http()->get("/transforms/{$name}/source"));

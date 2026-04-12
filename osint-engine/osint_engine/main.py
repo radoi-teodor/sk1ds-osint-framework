@@ -140,6 +140,32 @@ async def test_slave_endpoint(req: TestSlaveRequest) -> dict[str, Any]:
     return {"ok": True, "fingerprint": fp}
 
 
+class RunScriptRequest(BaseModel):
+    slave: SlavePayload
+    script: str
+
+
+@app.post("/slaves/run-script", dependencies=[Depends(verify_secret)])
+async def run_script_on_slave(req: RunScriptRequest) -> dict[str, Any]:
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    from osint_engine.slave_client import SlaveClient, SlaveConfig
+
+    cfg = SlaveConfig.from_dict(req.slave.model_dump())
+    loop = asyncio.get_running_loop()
+    _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="slave-script")
+    try:
+        def _run():
+            with SlaveClient(cfg) as client:
+                script = req.script.replace("\r\n", "\n").replace("\r", "\n")
+                result = client.execute("bash", timeout=300, stdin_data=script)
+                return {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.exit_code}
+        out = await asyncio.wait_for(loop.run_in_executor(_pool, _run), timeout=330)
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "output": None}
+    return {"ok": out["exit_code"] == 0, "output": out, "error": out["stderr"] if out["exit_code"] != 0 else None}
+
+
 @app.post("/reload", dependencies=[Depends(verify_secret)])
 async def reload_transforms() -> dict[str, Any]:
     load_transforms(settings.transforms_dir)

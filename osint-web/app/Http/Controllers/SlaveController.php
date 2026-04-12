@@ -2,8 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\RunSlaveSetupJob;
 use App\Models\Slave;
+use App\Models\SlaveSetupRun;
+use App\Models\SlaveSetupScript;
 use App\Services\EngineClient;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SlaveController extends Controller
@@ -74,6 +78,55 @@ class SlaveController extends Controller
             return redirect('/slaves')->with('status', "Connection to '{$slave->name}' OK.");
         }
         return redirect('/slaves')->withErrors(['slave' => "Connection to '{$slave->name}' failed. Check credentials."]);
+    }
+
+    public function showSetup(Slave $slave)
+    {
+        $scripts = SlaveSetupScript::orderByDesc('is_default')->orderBy('name')->get();
+        $runs = SlaveSetupRun::where('slave_id', $slave->id)
+            ->with('script')
+            ->latest()
+            ->limit(10)
+            ->get();
+        return view('slaves.setup', ['slave' => $slave, 'scripts' => $scripts, 'runs' => $runs]);
+    }
+
+    public function runSetup(Request $request, Slave $slave)
+    {
+        $data = $request->validate([
+            'script_id' => ['required', 'exists:slave_setup_scripts,id'],
+        ]);
+
+        $run = SlaveSetupRun::create([
+            'slave_id' => $slave->id,
+            'script_id' => $data['script_id'],
+            'user_id' => $request->user()?->id,
+            'status' => SlaveSetupRun::STATUS_QUEUED,
+        ]);
+
+        RunSlaveSetupJob::dispatch($run->id);
+
+        return redirect("/slaves/{$slave->id}/setup/runs/{$run->id}");
+    }
+
+    public function showRun(Slave $slave, SlaveSetupRun $run)
+    {
+        $run->load('script');
+        return view('slaves.setup-result', ['slave' => $slave, 'run' => $run]);
+    }
+
+    public function pollRun(Slave $slave, SlaveSetupRun $run): JsonResponse
+    {
+        return response()->json([
+            'id' => $run->id,
+            'status' => $run->status,
+            'stdout' => $run->stdout,
+            'stderr' => $run->stderr,
+            'exit_code' => $run->exit_code,
+            'error' => $run->error,
+            'started_at' => $run->started_at,
+            'finished_at' => $run->finished_at,
+        ]);
     }
 
     protected function probe(Slave $slave, EngineClient $engine): bool

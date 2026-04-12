@@ -3,7 +3,10 @@
 @section('content')
 <div class="flex items-center justify-between mb-4">
     <h1>▸ Slaves</h1>
-    <a href="/slaves/create" class="btn">+ NEW SLAVE</a>
+    <div class="flex gap-2">
+        <a href="/slaves/scripts" class="btn ghost">SETUP SCRIPTS</a>
+        <a href="/slaves/create" class="btn">+ NEW SLAVE</a>
+    </div>
 </div>
 <p class="text-dim mb-4">SSH connections to remote servers (or the local embedded server). Used by transforms that require shell execution.</p>
 
@@ -50,6 +53,7 @@
                             @csrf
                             <button class="ghost" title="Test connection and refresh info">TEST</button>
                         </form>
+                        <a href="/slaves/{{ $s->id }}/setup" class="btn ghost" title="Run setup script">SETUP</a>
                         <a href="/slaves/{{ $s->id }}/edit" class="btn ghost">EDIT</a>
                         <form method="POST" action="/slaves/{{ $s->id }}" data-confirm="Delete slave {{ $s->name }}?">
                             @csrf @method('DELETE')

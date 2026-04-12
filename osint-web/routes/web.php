@@ -14,6 +14,7 @@ use App\Http\Controllers\InviteController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\SetupController;
 use App\Http\Controllers\SlaveController;
+use App\Http\Controllers\SlaveSetupScriptController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TransformationController;
 use App\Http\Controllers\UserController;
@@ -134,6 +135,18 @@ Route::middleware(['auth', 'totp.verified'])->group(function () {
     Route::put('/slaves/{slave}', [SlaveController::class, 'update']);
     Route::delete('/slaves/{slave}', [SlaveController::class, 'destroy']);
     Route::post('/slaves/{slave}/test', [SlaveController::class, 'test']);
+    Route::get('/slaves/{slave}/setup', [SlaveController::class, 'showSetup']);
+    Route::post('/slaves/{slave}/setup', [SlaveController::class, 'runSetup']);
+    Route::get('/slaves/{slave}/setup/runs/{run}', [SlaveController::class, 'showRun']);
+    Route::get('/api/slaves/{slave}/setup/runs/{run}', [SlaveController::class, 'pollRun']);
+
+    // slave setup scripts
+    Route::get('/slaves/scripts', [SlaveSetupScriptController::class, 'index'])->name('slaves.scripts');
+    Route::post('/slaves/scripts', [SlaveSetupScriptController::class, 'store']);
+    Route::get('/slaves/scripts/{script}/edit', [SlaveSetupScriptController::class, 'edit']);
+    Route::put('/slaves/scripts/{script}', [SlaveSetupScriptController::class, 'update']);
+    Route::delete('/slaves/scripts/{script}', [SlaveSetupScriptController::class, 'destroy']);
+    Route::post('/slaves/scripts/{script}/default', [SlaveSetupScriptController::class, 'setDefault']);
 
     // users + invites
     Route::get('/users', [UserController::class, 'index'])->name('users.index');
