@@ -23,12 +23,36 @@
         </a>
         @auth
         <nav class="nav-links">
-            <a href="/projects" class="{{ request()->is('projects*') ? 'active' : '' }}">Projects</a>
-            <a href="/templates" class="{{ request()->is('templates*') ? 'active' : '' }}">Templates</a>
-            <a href="/transformations" class="{{ request()->is('transformations*') ? 'active' : '' }}">Transforms</a>
-            <a href="/api-keys" class="{{ request()->is('api-keys*') ? 'active' : '' }}">API Keys</a>
-            <a href="/slaves" class="{{ request()->is('slaves*') ? 'active' : '' }}">Slaves</a>
-            <a href="/users" class="{{ request()->is('users*') ? 'active' : '' }}">Operators</a>
+            <a href="/projects" class="{{ request()->is('projects*') || request()->is('graphs*') ? 'active' : '' }}">Projects</a>
+
+            <div class="nav-dropdown">
+                <button type="button" class="nav-dropdown-btn {{ request()->is('transformations*') || request()->is('templates*') ? 'active' : '' }}">
+                    Develop ▾
+                </button>
+                <div class="nav-dropdown-menu">
+                    <a href="/transformations" class="{{ request()->is('transformations*') ? 'active' : '' }}">Transforms</a>
+                    <a href="/templates" class="{{ request()->is('templates*') ? 'active' : '' }}">Templates</a>
+                </div>
+            </div>
+
+            <div class="nav-dropdown">
+                <button type="button" class="nav-dropdown-btn {{ request()->is('api-keys*') || request()->is('slaves*') ? 'active' : '' }}">
+                    Infra ▾
+                </button>
+                <div class="nav-dropdown-menu">
+                    <a href="/api-keys" class="{{ request()->is('api-keys*') ? 'active' : '' }}">🔑 API Keys</a>
+                    <a href="/slaves" class="{{ request()->is('slaves*') ? 'active' : '' }}">🖥 Slaves</a>
+                </div>
+            </div>
+
+            <div class="nav-dropdown">
+                <button type="button" class="nav-dropdown-btn {{ request()->is('users*') ? 'active' : '' }}">
+                    Admin ▾
+                </button>
+                <div class="nav-dropdown-menu">
+                    <a href="/users" class="{{ request()->is('users*') ? 'active' : '' }}">👤 Operators</a>
+                </div>
+            </div>
         </nav>
         <div class="nav-user">
             <span class="user-name">{{ auth()->user()->name }}</span>
