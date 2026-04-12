@@ -1,178 +1,257 @@
 # OSINT Framework
 
-A Maltego-style OSINT investigation platform.
+An open-source, Maltego-style investigation platform for open-source intelligence. Build visual graphs, run transformations on entities, automate recon workflows, and collaborate with your team — all from a single self-hosted web application.
 
-- **osint-web/** — Laravel 13 application: UI, auth (with setup mode + invite
-  links), projects, graphs, templates, transformation editor, API key vault.
-- **osint-engine/** — Python FastAPI service: dynamically discovers
-  transformation modules from `transforms/*.py` and runs them over HTTP.
-  Should NEVER be exposed publicly — Laravel is the only client.
+## What is this?
 
-The platform name shown in the UI is taken from Laravel's `config('app.name')`
-(environment variable `APP_NAME`). The eye icon next to it follows your cursor.
+Think of it as your own Maltego, but self-hosted, extensible, and with a hacker-aesthetic UI. You start with an entity (a domain, an email, an IP), right-click it, and run **transformations** — automated modules that discover related entities and connect them in a visual graph. Chain transformations into reusable **templates** for one-click automated investigations.
 
----
+**Key capabilities:**
 
-## Architecture at a glance
+- **Investigation graphs** — Cytoscape-powered canvas with 20+ entity types (domain, IP, email, hash, port, person, breach, etc.), minimap navigation, multiple layout algorithms, and presentation mode
+- **50+ built-in transformations** — DNS, WHOIS, crt.sh subdomains, HTTP probing, security header audit, Snusbase breach search, nmap port scanning, secrets scanning, and more
+- **Template automation** — Build reusable investigation workflows as visual DAGs. 8 pre-built templates included (passive recon, active recon, leak investigation, web app audit)
+- **Generators** — Feed wordlists and file data into transforms (directory bruteforce, subdomain enumeration)
+- **SSH slaves** — Execute tools (nmap, feroxbuster, custom scripts) on remote servers via SSH or locally
+- **API key vault** — Encrypted storage for third-party API credentials (Snusbase, Shodan, etc.)
+- **File manager** — Upload and organize wordlists, CIDR lists, and other operational files
+- **PDF reporting** — Flag investigation nodes and generate styled PDF reports
+- **Team collaboration** — Invite-link based operator management, TOTP 2FA, flat permissions (everyone sees everything)
+- **Extensible SDK** — Write custom transforms and generators in Python, deploy by dropping a `.py` file
+
+## Quick start with Docker
+
+The fastest way to get running. Requires [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/).
+
+```bash
+git clone <repo-url> osint-framework
+cd osint-framework
+docker compose up -d
+```
+
+Wait ~30 seconds for MySQL to initialize and migrations to run. Then open:
 
 ```
-Browser (Blade + vanilla JS + Cytoscape)
-        │  HTTPS + CSRF
-        ▼
-Laravel 13  ─────  MySQL / Postgres   (users, projects, graphs, api_keys, runs)
-        │
-        │  HTTP + shared secret (127.0.0.1 only)
-        ▼
-Python FastAPI engine  ──  transforms/*.py  (hot-reloadable)
+http://localhost:8000
 ```
 
-## Prerequisites
+You'll be redirected to **`/setup`** to create your first admin account. After that, the platform is ready with 8 pre-built investigation templates.
 
-- PHP 8.3+ (tested on Herd)
+**What `docker compose up` does automatically:**
+1. Starts MySQL 8 with persistent storage
+2. Starts the Python engine (54 transforms, 4 generators)
+3. Runs Laravel migrations + seeds 8 investigation templates
+4. Starts the Laravel web server on port 8000
+5. Starts the queue worker for async transform execution
+
+To stop: `docker compose down` (data persists in Docker volumes).
+
+### Docker environment
+
+Customize by creating a `.env` file at the repo root:
+
+```env
+MYSQL_ROOT_PASSWORD=your-secure-password
+ENGINE_SHARED_SECRET=your-random-secret
+WEB_PORT=8000
+APP_NAME=Your Platform Name
+```
+
+## Manual setup (without Docker)
+
+For development or when you need more control.
+
+### Prerequisites
+
+- PHP 8.3+ with extensions: pdo_mysql, bcmath, gd, zip
 - Composer
-- MySQL (XAMPP is fine) — migrations are also compatible with PostgreSQL
-- Python 3.11+ (tested with 3.14)
-
-## First-time setup
+- MySQL 8+ (or PostgreSQL — migrations are compatible)
+- Python 3.11+
+- nmap (optional, for network scanning transforms)
 
 ### 1. Python engine
 
 ```bash
 cd osint-engine
 python -m venv .venv
+
 # Windows
 .venv\Scripts\activate
-# or macOS/Linux
+# macOS / Linux
 source .venv/bin/activate
 
-pip install -e .[dev,extras]
-copy .env.example .env            # optional — defaults are fine for dev
+pip install -e ".[dev,extras]"
 ```
 
-Run it:
-
-```bash
-python -m osint_engine.main
-# -> listens on http://127.0.0.1:8077
-```
-
-### 2. Laravel app
+### 2. Laravel application
 
 ```bash
 cd osint-web
 composer install
-copy .env.example .env
+cp .env.example .env
 php artisan key:generate
 ```
 
-Create the MySQL database (via XAMPP/phpMyAdmin or CLI):
+Create the database:
 
 ```sql
 CREATE DATABASE osint_framework CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
-Then:
+Update `osint-web/.env` with your database credentials, then:
 
 ```bash
 php artisan migrate
-php artisan serve
+php artisan db:seed     # seeds 8 investigation templates
 ```
 
-Open `http://127.0.0.1:8000`. Because there are no users, you'll be redirected
-to `/setup` — create the first admin operator there.
+### 3. Start everything
 
-### 3. (Optional) seed sample data
+One command starts all three processes (web server, queue worker, engine):
 
-After logging in for the first time:
+```bash
+cd osint-web
+composer run dev          # Windows
+composer run dev:unix     # macOS / Linux
+```
+
+Open `http://localhost:8000` → redirected to `/setup` → create admin.
+
+Alternatively, start each process separately:
+
+```bash
+# Terminal 1 — engine
+cd osint-engine && python -m osint_engine.main
+
+# Terminal 2 — web
+cd osint-web && php artisan serve
+
+# Terminal 3 — queue worker
+cd osint-web && php artisan queue:work --tries=1
+```
+
+### 4. (Optional) demo data
 
 ```bash
 cd osint-web
 php artisan osint:demo
 ```
 
-This creates:
+Creates a sample project with an `example.com` investigation graph, useful for exploring the UI.
 
-- **DEMO-RECON** project with an `example.com` investigation graph pre-seeded.
-- Three templates: *Domain recon*, *Email recon*, *Offline demo*.
+---
 
-Open the investigation at `/projects` → DEMO-RECON → click the example.com
-graph. Select the `example.com` node and hit one of the "Run template" buttons
-in the right sidebar, or right-click the node for the individual transform
-menu.
+## Architecture
 
-## Development loop
-
-The platform runs transformations **asynchronously through Laravel's queue**,
-so dev needs three processes running: Laravel HTTP, the queue worker, and
-the Python engine. They're all wired into `composer run dev`:
-
-```bash
-cd osint-web
-composer run dev        # Windows
-composer run dev:unix   # macOS / Linux (different venv path)
+```
+Browser (Blade + Cytoscape.js)
+   │
+   │  HTTP + CSRF
+   ▼
+┌─────────────────┐     ┌─────────────────┐
+│  Laravel 13     │────▶│  MySQL 8        │
+│  (PHP 8.4)      │     │  (persistent)   │
+│                 │     └─────────────────┘
+│  Web server     │
+│  Queue worker   │     ┌─────────────────┐
+│                 │────▶│  Python FastAPI  │
+└─────────────────┘     │  Engine         │
+   shared secret        │  (transforms,   │
+   HTTP on :8077        ���   generators)   │
+                        └─────────────────┘
 ```
 
-This uses `npx concurrently` (already a transitive dependency of the Laravel
-scaffold) to spawn:
+- **Laravel** handles all user-facing HTTP, authentication, graph persistence, job orchestration, and PDF generation
+- **Python engine** discovers and executes transforms/generators dynamically, manages SSH slave connections
+- **Queue worker** processes transform/template jobs asynchronously — the browser polls for results and streams nodes into the graph in real time
+- Communication between Laravel and the engine uses a shared secret (`OSINT_ENGINE_SECRET` / `ENGINE_SHARED_SECRET`)
 
-| Name   | Command                                          |
-|--------|--------------------------------------------------|
-| web    | `php artisan serve` (127.0.0.1:8000)             |
-| queue  | `php artisan queue:work --tries=1 --verbose`     |
-| engine | `..\osint-engine\.venv\Scripts\python.exe -m osint_engine.main` (127.0.0.1:8077) |
+## Features in detail
 
-`Ctrl+C` stops all three (`-k` flag). You still need to have run the
-one-time setup (`composer install`, `pip install -e .[dev,extras]`,
-`php artisan migrate`) beforehand — see "First-time setup" above.
+### Investigation graphs
 
-Shared secret must match in both `.env` files (`ENGINE_SHARED_SECRET` on the
-engine side, `OSINT_ENGINE_SECRET` on the Laravel side).
+The core workspace. Create a project, open an investigation graph, and build out your entity map:
 
-### How investigations actually run
+- **Right-click** any node → context menu shows compatible transforms grouped by category
+- **Click a transform in the left sidebar** → runs it on selected node(s)
+- **Keyboard shortcuts**: `S` = box-select mode, `P` = presentation mode, `Delete` = delete selected, `Ctrl+A` = select all, `Ctrl+K` = filter transforms
+- **Layouts**: CoSE (force-directed), Breadthfirst (tree), Dagre (DAG), Klay (layered), Circle, Concentric, Grid
+- **Minimap** with draggable viewport for navigating large graphs
+- **Node inspector** (right sidebar) shows all entity data, parent/child navigation, and the full data payload from transforms
+- **Presentation mode** hides sidebars, locks node positions, and dims the toolbar — clean view for sharing
 
-1. Browser calls `POST /api/graphs/{id}/run-transform` (or `run-template`) →
-   Laravel creates an `investigation_jobs` row and dispatches a queued job
-   (`RunTransformJob` / `RunTemplateJob`). Response is instant:
-   `{ok, job_id, status: "queued"}`.
-2. `php artisan queue:work` picks the job up, calls the Python engine for each
-   source node, persists result nodes + edges, appends them to
-   `investigation_jobs.created_nodes`/`created_edges` and bumps
-   `progress_done` as it goes.
-3. The browser polls `GET /api/jobs/{id}?since_nodes=N&since_edges=M` every
-   ~700ms, adding only the newly-appended nodes/edges to Cytoscape. The
-   right-hand sidebar shows an "Active jobs" panel with a live progress bar.
-4. When `status` is `completed` / `failed` / `cancelled`, polling stops.
+### Transforms (50+)
 
-Queue connection is `database` by default (see `.env.example`). Switch to
-Redis/Horizon later without touching any code. Scale horizontally by running
-more `queue:work` processes — each investigation job is self-contained.
+| Category | Transforms |
+|---|---|
+| **Network** | dns.resolve, dns.reverse, whois.domain, crtsh.subdomains |
+| **Web** | http.title, http.headers, http.robots, http.security_headers, http.favicon_hash |
+| **Recon** | nmap.ping/quick/top100/top1000/all_tcp/udp_top50, nmap.service/os/vuln/ssl/http, web.feroxbuster, web.secrets_scan |
+| **Snusbase** | email/username/password/hash/lastip/name/domain search, extract_*, hash_reverse, ip_whois |
+| **Parsing** | email.to_domain, email.gravatar, email.validate, url.parse, url.to_domain, domain.tld, ip.classify, ip.geo |
+| **Crypto** | string.hashes, string.entropy, string.b64decode |
+| **Demo** | demo.echo, demo.split |
 
-## Running tests
+### Templates (8 pre-built)
 
-```bash
-# engine
-cd osint-engine && pytest
+Reusable investigation workflows executed as a visual DAG:
 
-# laravel
-cd osint-web && php artisan test
+| Template | Input | What it does |
+|---|---|---|
+| **Passive recon** | domain | DNS → IP geo/classify/reverse, HTTP title/headers/security, WHOIS, crt.sh, TLD |
+| **Active recon** | domain/IP | nmap top 100 → service/SSL/HTTP, favicon hash (requires slave) |
+| **Person leak investigation** | email | Snusbase search → extract password/username/IP/hash → geo + hash crack |
+| **Domain leak investigation** | domain | Snusbase domain search → extract all fields |
+| **Web application recon** | domain/url | HTTP probes, security audit, secrets scan, crt.sh → DNS |
+| **Domain recon** | domain | DNS + HTTP title + WHOIS (simple) |
+| **Email recon** | email | Domain extraction + gravatar + DNS |
+| **Offline demo** | any | Echo transform (engine smoke test) |
+
+Build your own in the template editor: add input slots and transform steps visually, connect them with shift-click, and the runner handles topological execution with fan-out.
+
+### Generators
+
+Generators bridge uploaded files with transforms. Upload a wordlist via the File Manager, then use it with transforms like feroxbuster or DNS bruteforce:
+
+| Generator | Input | Output |
+|---|---|---|
+| **seclists** | file | Wordlist content |
+| **custom_wordlist** | text | Text pass-through |
+| **ip_ranges** | file + text | Expanded CIDR ranges |
+| **subdomain_list** | file + text | Combined prefix + domain FQDNs |
+
+### SSH Slaves
+
+Configure remote servers (or the local embedded server) for tool execution:
+
+- **SSH slaves**: connect via password or private key (RSA, Ed25519, ECDSA auto-detected)
+- **Embedded slave**: run commands locally on the engine server
+- **Setup scripts**: define and run installation scripts (e.g., install nmap + feroxbuster) on slaves
+- **Probe on connect**: auto-detects whoami, hostname, OS, public IP, country (with flag emoji), ISP
+
+### Security
+
+- **TOTP 2FA** via Google Authenticator (optional per user, with recovery codes)
+- **Rate limiting** on login (5/min), setup (3/min), invite acceptance (5/min), TOTP challenge (5/min)
+- **Password policy**: min 8 chars + mixed case + number
+- **Invite-only registration**: 256-bit cryptographic tokens, one-shot, 72h expiry
+- **Encrypted at rest**: API keys, slave credentials, TOTP secrets (AES-256-CBC via APP_KEY)
+- **CSRF protection** on all state-changing endpoints
+- **Engine isolation**: binds to 127.0.0.1, protected by shared secret, never exposed publicly
+
+### SDK Documentation
+
+Full documentation for writing custom transforms and generators is available at:
+
+```
+http://localhost:8000/docs
 ```
 
-Laravel tests use an in-memory SQLite database (see `phpunit.xml`) so they
-never touch your MySQL. The tests covering transform execution fake the
-engine via Laravel's `Http::fake()`.
+This is a public page (no login required) with search, covering: `@transform` decorator, Node/Edge classes, SlaveClient API, generators, API keys, entity types, and real-world examples.
 
-## Operator workflow
+## Writing custom transforms
 
-1. First user creates the admin via `/setup`.
-2. Admin issues invite links from `/users`. Links are 43-char base64url tokens
-   derived from `random_bytes(32)`. Verified timing-safely with `hash_equals`.
-   One-shot, expire after `OSINT_INVITE_TTL_HOURS` (default 72).
-3. Every authenticated operator sees every project (flat permissions —
-   platform-wide collaboration).
-
-## Writing your own transforms
-
-Drop a file into `osint-engine/transforms/`:
+Drop a `.py` file into `osint-engine/transforms/`:
 
 ```python
 from osint_engine.sdk import transform, Node
@@ -184,49 +263,68 @@ from osint_engine.sdk import transform, Node
     category="custom",
     input_types=["domain"],
     output_types=["note"],
-    required_api_keys=["MY_API_KEY"],   # optional
-    timeout=10,
+    required_api_keys=["MY_KEY"],     # optional
+    requires_slave=True,              # optional
+    accepts_generator=True,           # optional
+    timeout=60,
 )
-def run(node, api_keys):
-    return [Node(type="note", value=f"hi {node.value}")]
+def run(node, api_keys, slave=None, generator_output=None):
+    # node.type, node.value, node.data
+    # api_keys["MY_KEY"] — decrypted from vault
+    # slave.execute("nmap ...") — run on remote server
+    # generator_output — string from a generator
+    return [Node(type="note", value=f"found: {node.value}")]
 ```
 
-Hit "Reload engine" in the UI (or POST `/api/transformations/reload`). Your
-transform appears instantly in the context menu of every compatible node.
+Hit **Reload Engine** in the UI → your transform appears instantly. Or create transforms directly from the web editor at `/transformations/new`.
 
-You can also write transforms directly from the UI: `/transformations/new`.
+Third-party libraries: add to `osint-engine/pyproject.toml` → `[project.optional-dependencies] extras`, then `pip install -e ".[extras]"`.
 
-### API keys
+## Running tests
 
-Store a key in `/api-keys` using the exact `name` your transform requires
-(e.g. `C99_API_KEY`). It is encrypted with Laravel's `Crypt::encryptString`
-(AES-256-CBC, derived from `APP_KEY`) and only decrypted server-side when
-passed to the engine.
+```bash
+# Python engine (71 tests)
+cd osint-engine && pytest
 
-### Third-party Python libraries
+# Laravel (43 tests)
+cd osint-web && php artisan test
+```
 
-Add them to `osint-engine/pyproject.toml` under
-`[project.optional-dependencies] extras`, then
-`pip install -e .[extras]`. `requests`, `dnspython`, `python-whois` and
-`beautifulsoup4` are pre-listed.
+Laravel tests use SQLite in-memory (`phpunit.xml`), engine calls are faked with `Http::fake()`.
 
-## Graph UI
+## Project structure
 
-- Right-click a node → context menu with transforms whose `input_types`
-  match that node's type.
-- Drag to pan, scroll to zoom, drag nodes to reposition (persisted
-  automatically).
-- Minimap (bottom-right) shows the whole graph; click or drag on it to
-  navigate the viewport on large graphs.
-- Cytoscape is configured with `textureOnViewport` and edge hiding during
-  viewport changes — tested to remain smooth with tens of thousands of nodes.
+```
+osint-framework/
+├── docker-compose.yml          # Docker orchestration (4 services)
+├── osint-web/                  # Laravel 13 application
+│   ├── app/
+│   │   ├── Http/Controllers/   # Auth, graphs, transforms, slaves, reports, ...
+│   │   ├── Jobs/               # RunTransformJob, RunTemplateJob, GenerateReportJob, ...
+│   │   ├── Models/             # User, Graph, GraphNode, Slave, ApiKey, ...
+│   │   └── Services/           # EngineClient, TemplateRunner
+│   ├── public/
+│   │   ├── css/app.css         # Hacker theme (dark/light mode)
+│   │   └── js/                 # graph.js (Cytoscape), editor.js (CodeMirror), app.js
+│   ├── resources/views/        # Blade templates
+│   │   ├── docs/               # SDK documentation (8 pages)
+│   │   └── reports/            # PDF template
+│   └── database/
+│       ├── migrations/         # 19 migrations
+│       └── seeders/            # TemplateSeeder (8 templates)
+├── osint-engine/               # Python FastAPI engine
+│   ├── osint_engine/
+│   │   ├── sdk.py              # @transform decorator, Node, Edge
+│   │   ├── generator_sdk.py    # @generator decorator, GeneratorInputs
+│   │   ├── slave_client.py     # SSH + subprocess execution
+│   │   ├── main.py             # FastAPI endpoints
+│   │   ├── runner.py           # Transform execution with timeout
+│   │   └── loader.py           # Dynamic module discovery
+│   ├── transforms/             # 54 built-in transforms
+│   └── generators/             # 4 built-in generators
+└── README.md
+```
 
-## Templates
+## License
 
-A template is just another graph (`type = template`) whose nodes are either
-`template:input` (root slots, bound to the investigation nodes you select) or
-`template:transform` (carry a `data.transform_name`). Edges are data flow. Use
-**shift-click** on two nodes inside a template editor to connect them. The
-runner topologically sorts the template and runs each step against all
-resulting investigation nodes produced by its parents — hierarchical fan-out
-included.
+MIT
