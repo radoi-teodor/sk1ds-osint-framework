@@ -4,6 +4,10 @@
 
 @push('head')
 <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dagre@0.8.5/dist/dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-dagre@2.5.0/cytoscape-dagre.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/klayjs@0.4.1/klay.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/cytoscape-klay@3.1.4/cytoscape-klay.min.js"></script>
 @endpush
 
 @section('content')
@@ -92,7 +96,18 @@
             @endunless
             <button class="ghost" id="select-toggle" onclick="toggleSelectMode()" title="Box-select mode (S)">▢ select</button>
             <button class="ghost" onclick="graphFit()">fit</button>
-            <button class="ghost" onclick="graphLayout()">layout</button>
+            <div class="toolbar-dropdown" id="layout-dropdown">
+                <button class="ghost" onclick="document.getElementById('layout-menu').classList.toggle('open')">layout ▾</button>
+                <div class="toolbar-dropdown-menu" id="layout-menu">
+                    <div class="ctx-item" onclick="graphLayout('cose')">CoSE <span class="text-dim">— force-directed</span></div>
+                    <div class="ctx-item" onclick="graphLayout('breadthfirst')">Breadthfirst <span class="text-dim">— tree / hierarchy</span></div>
+                    <div class="ctx-item" onclick="graphLayout('circle')">Circle</div>
+                    <div class="ctx-item" onclick="graphLayout('concentric')">Concentric <span class="text-dim">— by degree</span></div>
+                    <div class="ctx-item" onclick="graphLayout('grid')">Grid</div>
+                    <div class="ctx-item" onclick="graphLayout('dagre')">Dagre <span class="text-dim">— directed DAG</span></div>
+                    <div class="ctx-item" onclick="graphLayout('klay')">Klay <span class="text-dim">— layered</span></div>
+                </div>
+            </div>
             <button class="ghost" onclick="graphReload()">reload</button>
         </div>
 

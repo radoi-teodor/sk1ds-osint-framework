@@ -537,6 +537,30 @@ table.data tr:hover td { background: var(--accent-soft); }
   padding: 6px 10px;
   font-size: 11px;
 }
+.toolbar-dropdown { position: relative; display: inline-block; }
+.toolbar-dropdown-menu {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  background: var(--bg-elev);
+  border: 1px solid var(--accent);
+  box-shadow: var(--shadow);
+  min-width: 210px;
+  z-index: 30;
+  font-size: 12px;
+}
+.toolbar-dropdown-menu.open { display: block; }
+.toolbar-dropdown-menu .ctx-item {
+  padding: 6px 12px;
+  cursor: pointer;
+  border-bottom: 1px dashed var(--border);
+  white-space: nowrap;
+}
+.toolbar-dropdown-menu .ctx-item:last-child { border-bottom: none; }
+.toolbar-dropdown-menu .ctx-item:hover { background: var(--accent-soft); color: var(--accent); }
+.toolbar-dropdown-menu .ctx-item .text-dim { font-size: 10px; }
 
 .transform-groups { display: flex; flex-direction: column; gap: 4px; }
 

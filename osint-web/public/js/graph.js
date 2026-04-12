@@ -144,7 +144,12 @@
     showDetail(n);
   });
   cy.on('tap', (evt) => {
-    if (evt.target === cy) { closeMenu(); clearDetail(); }
+    if (evt.target === cy) {
+      closeMenu();
+      clearDetail();
+      const ddm = document.getElementById('layout-menu');
+      if (ddm) ddm.classList.remove('open');
+    }
   });
 
   function showDetail(n) {
@@ -176,6 +181,35 @@
           rendered = esc(String(v));
         }
         html += `<div class="field"><div class="label">${esc(k)}</div><div class="value">${rendered}</div></div>`;
+      }
+    }
+
+    // Parent navigation
+    const parents = cy.getElementById(d.id).incomers('node');
+    if (parents.length > 0) {
+      html += `<hr style="margin:10px 0;border:none;border-top:1px dashed var(--border)">`;
+      html += `<div class="label" style="margin-bottom:6px;">Parent${parents.length > 1 ? 's' : ''}</div>`;
+      parents.forEach((p) => {
+        const pd = p.data();
+        const plabel = (pd.raw_label || pd.value || pd.id);
+        const short = plabel.length > 35 ? plabel.slice(0, 32) + '...' : plabel;
+        html += `<div class="field"><button class="btn ghost w-full" style="text-align:left;font-size:10px;" onclick="window.graphFocusNode('${esc(pd.id)}')">⬆ ${esc(short)}</button></div>`;
+      });
+    }
+
+    // Children navigation
+    const children = cy.getElementById(d.id).outgoers('node');
+    if (children.length > 0) {
+      html += `<div class="label" style="margin:8px 0 6px;">Children <span class="text-dim">(${children.length})</span></div>`;
+      const shown = children.slice(0, 8);
+      shown.forEach((c) => {
+        const cd = c.data();
+        const clabel = (cd.raw_label || cd.value || cd.id);
+        const short = clabel.length > 35 ? clabel.slice(0, 32) + '...' : clabel;
+        html += `<div class="field"><button class="btn ghost w-full" style="text-align:left;font-size:10px;" onclick="window.graphFocusNode('${esc(cd.id)}')">⬇ ${esc(short)}</button></div>`;
+      });
+      if (children.length > 8) {
+        html += `<div class="text-dim small">+${children.length - 8} more</div>`;
       }
     }
 
@@ -845,23 +879,83 @@
     window.addEventListener('mouseup', () => { dragging = false; });
   }
 
+  window.graphFocusNode = function (cyId) {
+    const n = cy.getElementById(cyId);
+    if (!n || n.length === 0) return;
+    cy.$('node:selected').unselect();
+    n.select();
+    cy.animate({ center: { eles: n }, zoom: Math.max(cy.zoom(), 1.5) }, { duration: 250 });
+    showDetail(n);
+    drawMinimap();
+  };
+
   window.graphFit = function () { cy.fit(undefined, 40); drawMinimap(); };
-  window.graphLayout = function () {
+  window.graphLayout = function (name) {
+    // Close dropdown
+    const ddMenu = document.getElementById('layout-menu');
+    if (ddMenu) ddMenu.classList.remove('open');
+
+    name = name || 'cose';
     const n = cy.nodes().length;
-    cy.layout({
-      name: 'cose',
-      animate: n < 500,
-      animationDuration: 300,
-      nodeRepulsion: function () { return n > 200 ? 2000 : 5000; },
-      idealEdgeLength: function () { return n > 200 ? 30 : 50; },
-      edgeElasticity: function () { return n > 200 ? 50 : 100; },
-      gravity: n > 200 ? 1.2 : 0.6,
-      numIter: n > 500 ? 100 : 300,
-      nodeDimensionsIncludeLabels: false,
-      fit: true,
-      padding: 30,
-    }).run();
-    setTimeout(drawMinimap, n < 500 ? 400 : 50);
+    const anim = n < 500;
+    const base = { fit: true, padding: 30, animate: anim, animationDuration: 300, nodeDimensionsIncludeLabels: false };
+
+    const configs = {
+      cose: {
+        ...base, name: 'cose',
+        nodeRepulsion: function () { return n > 200 ? 2000 : 5000; },
+        idealEdgeLength: function () { return n > 200 ? 30 : 50; },
+        edgeElasticity: function () { return n > 200 ? 50 : 100; },
+        gravity: n > 200 ? 1.2 : 0.6,
+        numIter: n > 500 ? 100 : 300,
+      },
+      breadthfirst: {
+        ...base, name: 'breadthfirst',
+        directed: true,
+        spacingFactor: n > 150 ? 0.5 : 0.9,
+      },
+      circle: {
+        ...base, name: 'circle',
+        spacingFactor: n > 150 ? 0.4 : 0.75,
+      },
+      concentric: {
+        ...base, name: 'concentric',
+        concentric: function (node) { return node.degree(); },
+        levelWidth: function () { return 2; },
+        spacingFactor: n > 150 ? 0.4 : 0.75,
+      },
+      grid: {
+        ...base, name: 'grid',
+        condense: true,
+        spacingFactor: n > 150 ? 0.4 : 0.7,
+      },
+      dagre: {
+        ...base, name: 'dagre',
+        rankDir: 'LR',
+        rankSep: n > 200 ? 25 : 55,
+        nodeSep: n > 200 ? 12 : 25,
+        edgeSep: 8,
+      },
+      klay: {
+        ...base, name: 'klay',
+        klay: {
+          direction: 'RIGHT',
+          spacing: n > 200 ? 18 : 35,
+          edgeSpacingFactor: 0.3,
+          compactComponents: true,
+        },
+      },
+    };
+
+    const cfg = configs[name] || configs.cose;
+    try {
+      cy.layout(cfg).run();
+    } catch (e) {
+      window.toast(name + ' failed — try another', 'danger');
+      return;
+    }
+    setTimeout(drawMinimap, anim ? 400 : 50);
+    window.toast(name + ' layout');
   };
 
   // ---------- transforms palette filter ----------
@@ -950,6 +1044,8 @@
 
     if (e.key === 'Escape') {
       closeMenu();
+      const ddm = document.getElementById('layout-menu');
+      if (ddm) ddm.classList.remove('open');
       if (selectMode) setSelectMode(false);
       if (presentMode) setPresentMode(false);
       return;
