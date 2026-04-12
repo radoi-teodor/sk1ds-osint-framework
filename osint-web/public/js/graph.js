@@ -548,12 +548,23 @@
     tick();
   }
 
+  function getSlaveId() {
+    const sel = document.getElementById('slave-select');
+    return sel && sel.value ? parseInt(sel.value, 10) : null;
+  }
+
+  function transformPayload(extra) {
+    const slaveId = getSlaveId();
+    if (slaveId) extra.slave_id = slaveId;
+    return extra;
+  }
+
   window.runTransform = function (cyId, transformName) {
     closeMenu();
     window.toast(`Queuing ${transformName}...`);
     window.csrfFetch(`${api}/run-transform`, {
       method: 'POST',
-      body: JSON.stringify({ source_cy_id: cyId, transform: transformName }),
+      body: JSON.stringify(transformPayload({ source_cy_id: cyId, transform: transformName })),
     })
       .then((r) => r.json())
       .then((data) => {
@@ -569,6 +580,12 @@
       window.toast('Select one or more nodes first', 'warn');
       return;
     }
+    // Check if transform requires slave and none selected
+    const spec = (cfg.transforms || []).find((t) => t.name === transformName);
+    if (spec && spec.requires_slave && !getSlaveId()) {
+      window.toast('This transform requires a slave — select one in the right sidebar', 'warn');
+      return;
+    }
     const ids = sel.map((n) => n.data('id'));
     if (ids.length === 1) {
       window.runTransform(ids[0], transformName);
@@ -582,7 +599,7 @@
     window.toast(`Queuing ${transformName} × ${cyIds.length}...`);
     window.csrfFetch(`${api}/run-transform`, {
       method: 'POST',
-      body: JSON.stringify({ source_cy_ids: cyIds, transform: transformName }),
+      body: JSON.stringify(transformPayload({ source_cy_ids: cyIds, transform: transformName })),
     })
       .then((r) => r.json())
       .then((data) => {

@@ -131,10 +131,10 @@ class GraphApiController extends Controller
             'source_cy_ids' => ['required_without:source_cy_id', 'array', 'min:1'],
             'source_cy_ids.*' => ['string'],
             'transform' => ['required', 'string'],
+            'slave_id' => ['nullable', 'integer', 'exists:slaves,id'],
         ]);
 
         $cyIds = $payload['source_cy_ids'] ?? [$payload['source_cy_id']];
-        // ensure they exist on this graph
         $exists = $graph->nodes()->whereIn('cy_id', $cyIds)->pluck('cy_id')->all();
         if (empty($exists)) {
             return response()->json(['ok' => false, 'error' => 'No matching source nodes'], 422);
@@ -145,6 +145,7 @@ class GraphApiController extends Controller
             'user_id' => $request->user()?->id,
             'kind' => InvestigationJob::KIND_TRANSFORM,
             'transform_name' => $payload['transform'],
+            'slave_id' => $payload['slave_id'] ?? null,
             'source_cy_ids' => array_values($exists),
             'status' => InvestigationJob::STATUS_QUEUED,
             'progress_total' => count($exists),

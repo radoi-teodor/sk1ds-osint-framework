@@ -73,6 +73,7 @@ class TransformSpec:
     required_api_keys: list[str]
     timeout: int
     author: str
+    requires_slave: bool = False
     func: Callable | None = None
     source_file: str | None = None
 
@@ -85,6 +86,7 @@ class TransformSpec:
             "input_types": self.input_types,
             "output_types": self.output_types,
             "required_api_keys": self.required_api_keys,
+            "requires_slave": self.requires_slave,
             "timeout": self.timeout,
             "author": self.author,
             "source_file": self.source_file,
@@ -103,12 +105,15 @@ def transform(
     input_types: list[str] | None = None,
     output_types: list[str] | None = None,
     required_api_keys: list[str] | None = None,
+    requires_slave: bool = False,
     timeout: int = 30,
     author: str = "",
 ):
     """Decorator: register a function as a transformation.
 
     input_types may contain "*" to match any node type.
+    If requires_slave is True, the transform function receives a third
+    argument: a SlaveClient instance.
     """
 
     def decorator(func: Callable) -> Callable:
@@ -120,6 +125,7 @@ def transform(
             input_types=list(input_types or ["*"]),
             output_types=list(output_types or []),
             required_api_keys=list(required_api_keys or []),
+            requires_slave=requires_slave,
             timeout=timeout,
             author=author,
             func=func,

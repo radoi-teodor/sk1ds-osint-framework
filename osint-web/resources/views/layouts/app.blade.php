@@ -27,6 +27,7 @@
             <a href="/templates" class="{{ request()->is('templates*') ? 'active' : '' }}">Templates</a>
             <a href="/transformations" class="{{ request()->is('transformations*') ? 'active' : '' }}">Transforms</a>
             <a href="/api-keys" class="{{ request()->is('api-keys*') ? 'active' : '' }}">API Keys</a>
+            <a href="/slaves" class="{{ request()->is('slaves*') ? 'active' : '' }}">Slaves</a>
             <a href="/users" class="{{ request()->is('users*') ? 'active' : '' }}">Operators</a>
         </nav>
         <div class="nav-user">

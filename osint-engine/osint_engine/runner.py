@@ -42,10 +42,25 @@ def _normalize(result: Any) -> tuple[list[dict], list[dict]]:
     raise TypeError(f"Transform must return list/dict/Node, got {type(result).__name__}")
 
 
+def _invoke(spec: TransformSpec, node: Node, api_keys: dict, slave_config: dict | None):
+    """Call the transform function with the right arity (2 or 3 args)."""
+    from osint_engine.slave_client import SlaveClient, SlaveConfig
+
+    if spec.requires_slave and slave_config:
+        cfg = SlaveConfig.from_dict(slave_config)
+        with SlaveClient(cfg) as client:
+            return spec.func(node, api_keys, client)
+    elif spec.requires_slave:
+        return [Node(type="note", value="no slave configured for this transform", label="no slave")]
+    else:
+        return spec.func(node, api_keys)
+
+
 async def run_transform(
     spec: TransformSpec,
     node: Node,
     api_keys: dict[str, str],
+    slave_config: dict | None = None,
 ) -> dict[str, Any]:
     """Run a transformation asynchronously with a timeout."""
     if spec.func is None:
@@ -54,7 +69,9 @@ async def run_transform(
     loop = asyncio.get_running_loop()
     try:
         raw = await asyncio.wait_for(
-            loop.run_in_executor(_executor, spec.func, node, api_keys),
+            loop.run_in_executor(
+                _executor, _invoke, spec, node, api_keys, slave_config
+            ),
             timeout=spec.timeout,
         )
     except asyncio.TimeoutError:

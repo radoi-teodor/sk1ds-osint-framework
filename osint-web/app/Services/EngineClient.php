@@ -59,11 +59,22 @@ class EngineClient
         return $this->wrap(fn () => $this->http()->get('/transforms'));
     }
 
-    public function runTransform(string $name, array $node, array $apiKeys = []): array
+    public function runTransform(string $name, array $node, array $apiKeys = [], ?array $slave = null): array
     {
-        return $this->wrap(fn () => $this->http()->post("/transforms/{$name}/run", [
+        $body = [
             'node' => $node,
             'api_keys' => (object) $apiKeys,
+        ];
+        if ($slave !== null) {
+            $body['slave'] = $slave;
+        }
+        return $this->wrap(fn () => $this->http()->post("/transforms/{$name}/run", $body));
+    }
+
+    public function testSlave(array $slavePayload): array
+    {
+        return $this->wrap(fn () => $this->http()->timeout(35)->post('/slaves/test', [
+            'slave' => $slavePayload,
         ]));
     }
 

@@ -65,10 +65,19 @@ class RunTransformJob implements ShouldQueue
         }
         $apiKeys = ApiKeyResolver::resolveMany($requiredKeys);
 
+        // Resolve slave if needed
+        $slave = null;
+        if ($job->slave_id) {
+            $slaveModel = \App\Models\Slave::find($job->slave_id);
+            if ($slaveModel) {
+                $slave = $slaveModel->toEnginePayload();
+            }
+        }
+
         $errors = [];
         foreach ($sources as $source) {
             try {
-                $this->runOne($engine, $graph, $job, $source, $apiKeys);
+                $this->runOne($engine, $graph, $job, $source, $apiKeys, $slave);
             } catch (Throwable $e) {
                 $errors[] = "[{$source->cy_id}] " . $e->getMessage();
             }
@@ -98,7 +107,7 @@ class RunTransformJob implements ShouldQueue
         }
     }
 
-    protected function runOne(EngineClient $engine, Graph $graph, InvestigationJob $job, GraphNode $source, array $apiKeys): void
+    protected function runOne(EngineClient $engine, Graph $graph, InvestigationJob $job, GraphNode $source, array $apiKeys, ?array $slave = null): void
     {
         $start = microtime(true);
         $result = $engine->runTransform($job->transform_name, [
@@ -106,7 +115,7 @@ class RunTransformJob implements ShouldQueue
             'value' => $source->value,
             'label' => $source->label,
             'data' => (object) ($source->data ?: []),
-        ], $apiKeys);
+        ], $apiKeys, $slave);
         $duration = (int) ((microtime(true) - $start) * 1000);
 
         $runRow = TransformationRun::create([

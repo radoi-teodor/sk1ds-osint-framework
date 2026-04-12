@@ -73,6 +73,9 @@
                                     @if(!empty($t['required_api_keys']))
                                         · <span class="keys" title="requires API keys">🔑 {{ implode(',', $t['required_api_keys']) }}</span>
                                     @endif
+                                    @if(!empty($t['requires_slave']))
+                                        · <span class="keys" title="requires a slave connection">🖥 slave</span>
+                                    @endif
                                 </div>
                             </div>
                         @endforeach
@@ -126,6 +129,18 @@
             {{ $graph->type }} · {{ $graph->project?->name ?? '—' }}
         </div>
         @unless($graph->isTemplate())
+        @if($slaves->isNotEmpty())
+        <div class="mb-3">
+            <div class="panel-title">Slave</div>
+            <select id="slave-select" style="width:100%;font-size:11px;">
+                <option value="">none (no slave)</option>
+                @foreach($slaves as $sl)
+                    <option value="{{ $sl->id }}">{{ $sl->type === 'embedded' ? '⚙' : '🖥' }} {{ $sl->name }}</option>
+                @endforeach
+            </select>
+            <div class="text-dim small mt-2">Used by transforms that require shell execution (e.g. nmap).</div>
+        </div>
+        @endif
         <div class="mb-4">
             <div class="panel-title">Run template</div>
             <div class="text-dim small mb-2">Select one or more nodes, then pick a template.</div>
@@ -161,6 +176,7 @@
         entityTypes: @json(\App\Support\EntityTypes::all()),
         transforms: @json($transforms),
         templates: @json($templates),
+        slaves: @json($slaves),
     };
 </script>
 <script src="{{ asset('js/graph.js') }}" defer></script>

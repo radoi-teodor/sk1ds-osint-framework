@@ -8,6 +8,7 @@ use App\Http\Controllers\InvestigationJobController;
 use App\Http\Controllers\InviteController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\SetupController;
+use App\Http\Controllers\SlaveController;
 use App\Http\Controllers\TemplateController;
 use App\Http\Controllers\TransformationController;
 use App\Http\Controllers\UserController;
@@ -79,6 +80,15 @@ Route::middleware('auth')->group(function () {
     Route::get('/api-keys', [ApiKeyController::class, 'index'])->name('api-keys.index');
     Route::post('/api-keys', [ApiKeyController::class, 'store']);
     Route::delete('/api-keys/{api_key}', [ApiKeyController::class, 'destroy']);
+
+    // slaves
+    Route::get('/slaves', [SlaveController::class, 'index'])->name('slaves.index');
+    Route::get('/slaves/create', [SlaveController::class, 'create']);
+    Route::post('/slaves', [SlaveController::class, 'store']);
+    Route::get('/slaves/{slave}/edit', [SlaveController::class, 'edit']);
+    Route::put('/slaves/{slave}', [SlaveController::class, 'update']);
+    Route::delete('/slaves/{slave}', [SlaveController::class, 'destroy']);
+    Route::post('/slaves/{slave}/test', [SlaveController::class, 'test']);
 
     // users + invites
     Route::get('/users', [UserController::class, 'index'])->name('users.index');

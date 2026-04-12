@@ -35,9 +35,23 @@ class NodePayload(BaseModel):
     data: dict[str, Any] = Field(default_factory=dict)
 
 
+class SlavePayload(BaseModel):
+    type: str = "embedded"
+    host: str | None = None
+    port: int = 22
+    username: str | None = None
+    auth_method: str | None = None
+    credential: str | None = None
+
+
 class RunRequest(BaseModel):
     node: NodePayload
     api_keys: dict[str, str] = Field(default_factory=dict)
+    slave: SlavePayload | None = None
+
+
+class TestSlaveRequest(BaseModel):
+    slave: SlavePayload
 
 
 class SourceUpdate(BaseModel):
@@ -93,7 +107,27 @@ async def run_transform_endpoint(name: str, req: RunRequest) -> dict[str, Any]:
         label=req.node.label,
         data=req.node.data or {},
     )
-    return await run_transform(spec, node, req.api_keys)
+    slave_dict = req.slave.model_dump() if req.slave else None
+    return await run_transform(spec, node, req.api_keys, slave_config=slave_dict)
+
+
+@app.post("/slaves/test", dependencies=[Depends(verify_secret)])
+async def test_slave_endpoint(req: TestSlaveRequest) -> dict[str, Any]:
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    from osint_engine.slave_client import SlaveClient, SlaveConfig, probe_slave
+
+    cfg = SlaveConfig.from_dict(req.slave.model_dump())
+    loop = asyncio.get_running_loop()
+    _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="slave-test")
+    try:
+        def _probe():
+            with SlaveClient(cfg) as client:
+                return probe_slave(client)
+        fp = await asyncio.wait_for(loop.run_in_executor(_pool, _probe), timeout=30)
+    except Exception as exc:
+        return {"ok": False, "error": f"{type(exc).__name__}: {exc}", "fingerprint": None}
+    return {"ok": True, "fingerprint": fp}
 
 
 @app.post("/reload", dependencies=[Depends(verify_secret)])

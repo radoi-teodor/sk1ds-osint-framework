@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Graph;
+use App\Models\Slave;
 use App\Services\EngineClient;
 use Illuminate\Http\Request;
 
@@ -24,12 +25,14 @@ class GraphController extends Controller
         }
 
         $templates = Graph::where('type', Graph::TYPE_TEMPLATE)->orderBy('title')->get(['id', 'title']);
+        $slaves = Slave::orderBy('name')->get(['id', 'name', 'type']);
 
         return view('graphs.show', [
             'graph' => $graph,
             'transforms' => $transforms,
             'engineError' => $engineError,
             'templates' => $templates,
+            'slaves' => $slaves,
         ]);
     }
 
