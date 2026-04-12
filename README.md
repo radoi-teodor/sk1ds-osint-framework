@@ -166,20 +166,20 @@ Creates a sample project with an `example.com` investigation graph, useful for e
 
 ```
 Browser (Blade + Cytoscape.js)
-   │
-   │  HTTP + CSRF
-   ▼
-┌─────────────────┐     ┌─────────────────┐
-│  Laravel 13     │────▶│  MySQL 8        │
-│  (PHP 8.4)      │     │  (persistent)   │
-│                 │     └─────────────────┘
-│  Web server     │
-│  Queue worker   │     ┌─────────────────┐
-│                 │────▶│  Python FastAPI  │
-└─────────────────┘     │  Engine         │
-   shared secret        │  (transforms,   │
-   HTTP on :8077        ���   generators)   │
-                        └─────────────────┘
+    |
+    |  HTTP + CSRF
+    v
++-------------------+     +-------------------+
+|  Laravel 13       |---->|  MySQL 8          |
+|  (PHP 8.4)        |     |  (persistent)     |
+|                   |     +-------------------+
+|  Web server       |
+|  Queue worker     |     +-------------------+
+|                   |---->|  Python FastAPI    |
++-------------------+     |  Engine           |
+   shared secret          |  (transforms,     |
+   HTTP on :8077          |   generators)     |
+                          +-------------------+
 ```
 
 - **Laravel** handles all user-facing HTTP, authentication, graph persistence, job orchestration, and PDF generation
