@@ -160,6 +160,19 @@
         <div id="selected-node" class="selected-node-box">
             <div class="text-dim small">Click a node to inspect.</div>
         </div>
+        @unless($graph->isTemplate())
+        <div class="panel-title" style="margin-top:16px;">Report</div>
+        <div class="flex-col gap-2">
+            <button class="ghost w-full" onclick="flagSelectedForReport()">&#9873; Flag selected</button>
+            <button class="ghost w-full" onclick="unflagSelectedForReport()">Unflag selected</button>
+            <div class="flex gap-2">
+                <button class="ghost" onclick="flagAllForReport(true)" style="flex:1;font-size:10px;">Flag all</button>
+                <button class="ghost" onclick="flagAllForReport(false)" style="flex:1;font-size:10px;">Unflag all</button>
+            </div>
+            <button class="w-full" onclick="generateReport()">&#9655; GENERATE PDF</button>
+        </div>
+        @endunless
+
         <hr>
         <form method="POST" action="/graphs/{{ $graph->id }}" data-confirm="Delete this graph?">
             @csrf @method('DELETE')

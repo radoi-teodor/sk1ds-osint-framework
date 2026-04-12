@@ -71,6 +71,9 @@
         ..._labelStyle,
         'background-color': '#ffb000', 'border-color': '#ffb000', 'shape': 'round-diamond', 'width': 44, 'height': 44,
       }},
+      { selector: 'node.flagged', style: {
+        'border-color': '#ffb000', 'border-width': 3, 'border-style': 'double',
+      }},
       { selector: 'node[entity_type = "template:transform"]', style: {
         ..._labelStyle,
         'background-color': '#1d2620', 'border-color': '#00ff9c', 'shape': 'round-tag', 'width': 60, 'height': 30,
@@ -101,7 +104,8 @@
         cy.elements().remove();
         const toAdd = [];
         for (const n of data.nodes || []) {
-          toAdd.push({ group: 'nodes', data: nodeData(n), position: { x: n.position_x || 0, y: n.position_y || 0 } });
+          const cls = n.flagged ? 'flagged' : '';
+          toAdd.push({ group: 'nodes', data: nodeData(n), position: { x: n.position_x || 0, y: n.position_y || 0 }, classes: cls });
         }
         for (const e of data.edges || []) {
           toAdd.push({ group: 'edges', data: { id: e.cy_id, source: e.source, target: e.target, label: e.label } });
@@ -330,6 +334,7 @@
   const menu = document.getElementById('ctx-menu');
 
   function closeMenu() { if (menu) menu.classList.remove('open'); }
+  window.closeMenu = closeMenu;
 
   cy.on('cxttap', 'node', (evt) => {
     if (!menu || presentMode) return;
@@ -409,6 +414,14 @@
           html += `<div class="ctx-item" title="${desc}" onclick="window.runTransform('${nodeId}','${esc(t.name)}')">${esc(t.display_name || t.name)}${needsKey}</div>`;
         }
       }
+    }
+
+    html += `<div class="ctx-cat">report</div>`;
+    const isFlagged = cy.getElementById(n.data('id')).hasClass('flagged');
+    if (isFlagged) {
+      html += `<div class="ctx-item" onclick="closeMenu(); flagForReport(['${nodeId}'], false)">unflag from report</div>`;
+    } else {
+      html += `<div class="ctx-item" onclick="closeMenu(); flagForReport(['${nodeId}'], true)">&#9873; flag for report</div>`;
     }
 
     html += `<div class="ctx-cat">node</div>`;
@@ -1013,6 +1026,75 @@
   };
 
   window.graphFit = function () { cy.fit(undefined, 40); drawMinimap(); };
+
+  // ---------- report flagging ----------
+  window.flagForReport = function (cyIds, flagged) {
+    window.csrfFetch(`${api}/report/flag`, {
+      method: 'POST',
+      body: JSON.stringify({ cy_ids: cyIds, flagged }),
+    }).then(r => r.json()).then(() => {
+      cyIds.forEach(id => {
+        const n = cy.getElementById(id);
+        if (n.length) flagged ? n.addClass('flagged') : n.removeClass('flagged');
+      });
+      window.toast(flagged ? `${cyIds.length} flagged for report` : `${cyIds.length} unflagged`);
+    });
+  };
+
+  window.flagAllForReport = function (flagged) {
+    window.csrfFetch(`${api}/report/flag-all`, {
+      method: 'POST',
+      body: JSON.stringify({ flagged }),
+    }).then(r => r.json()).then(() => {
+      flagged ? cy.nodes().addClass('flagged') : cy.nodes().removeClass('flagged');
+      window.toast(flagged ? 'All nodes flagged' : 'All nodes unflagged');
+    });
+  };
+
+  window.flagSelectedForReport = function () {
+    const sel = cy.$('node:selected');
+    if (sel.length === 0) { window.toast('Select nodes first', 'warn'); return; }
+    const ids = sel.map(n => n.data('id'));
+    flagForReport(ids, true);
+  };
+
+  window.unflagSelectedForReport = function () {
+    const sel = cy.$('node:selected');
+    if (sel.length === 0) { window.toast('Select nodes first', 'warn'); return; }
+    const ids = sel.map(n => n.data('id'));
+    flagForReport(ids, false);
+  };
+
+  window.generateReport = function () {
+    window.toast('Generating report...');
+    window.csrfFetch(`${api}/report/generate`, { method: 'POST' })
+      .then(r => r.json())
+      .then(data => {
+        if (!data.ok) { window.toast('Error: ' + (data.error || 'unknown'), 'danger'); return; }
+        pollReport(data.report_job_id);
+      })
+      .catch(e => window.toast('Request failed: ' + e.message, 'danger'));
+  };
+
+  function pollReport(jobId) {
+    function tick() {
+      window.csrfFetch(`/api/reports/${jobId}`)
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'completed') {
+            window.toast(`Report ready (${data.node_count} nodes) — downloading...`);
+            window.location.href = `/api/reports/${jobId}/download`;
+          } else if (data.status === 'failed') {
+            window.toast('Report failed: ' + (data.error || ''), 'danger');
+          } else {
+            setTimeout(tick, 1500);
+          }
+        })
+        .catch(() => setTimeout(tick, 3000));
+    }
+    setTimeout(tick, 1000);
+  }
+
   window.graphLayout = function (name) {
     // Close dropdown
     const ddMenu = document.getElementById('layout-menu');

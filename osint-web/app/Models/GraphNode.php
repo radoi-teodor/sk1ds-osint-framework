@@ -9,7 +9,7 @@ class GraphNode extends Model
 {
     protected $fillable = [
         'graph_id', 'cy_id', 'entity_type', 'value', 'label',
-        'data', 'position_x', 'position_y', 'created_by',
+        'data', 'position_x', 'position_y', 'flagged_for_report', 'created_by',
     ];
 
     protected function casts(): array
@@ -18,6 +18,7 @@ class GraphNode extends Model
             'data' => 'array',
             'position_x' => 'float',
             'position_y' => 'float',
+            'flagged_for_report' => 'boolean',
         ];
     }
 

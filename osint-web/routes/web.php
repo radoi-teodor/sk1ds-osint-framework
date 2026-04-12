@@ -76,7 +76,14 @@ Route::middleware(['auth', 'totp.verified'])->group(function () {
         Route::post('/run-transform', [GraphApiController::class, 'runTransform']);
         Route::post('/run-template', [TemplateController::class, 'run']);
         Route::get('/jobs', fn (\App\Models\Graph $graph) => app(InvestigationJobController::class)->indexForGraph($graph->id));
+        Route::post('/report/flag', [\App\Http\Controllers\ReportController::class, 'flag']);
+        Route::post('/report/flag-all', [\App\Http\Controllers\ReportController::class, 'flagAll']);
+        Route::post('/report/generate', [\App\Http\Controllers\ReportController::class, 'generate']);
     });
+
+    // Report polling + download
+    Route::get('/api/reports/{report_job}', [\App\Http\Controllers\ReportController::class, 'poll']);
+    Route::get('/api/reports/{report_job}/download', [\App\Http\Controllers\ReportController::class, 'download']);
 
     // Job polling (graph-agnostic)
     Route::get('/api/jobs/{job}', [InvestigationJobController::class, 'show']);

@@ -30,6 +30,7 @@ class GraphApiController extends Controller
                 'data' => $n->data ?? new \stdClass(),
                 'position_x' => $n->position_x,
                 'position_y' => $n->position_y,
+                'flagged' => (bool) $n->flagged_for_report,
             ]),
             'edges' => $graph->edges()->get()->map(fn (GraphEdge $e) => [
                 'cy_id' => $e->cy_id,
