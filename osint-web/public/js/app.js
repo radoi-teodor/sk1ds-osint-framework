@@ -71,7 +71,14 @@
       { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': token, 'X-Requested-With': 'XMLHttpRequest' },
       opts.headers || {}
     );
-    return fetch(url, opts);
+    return fetch(url, opts).then(function (resp) {
+      if (resp.status === 419) {
+        window.toast('Session expired — reloading...', 'warn');
+        setTimeout(function () { window.location.reload(); }, 1500);
+        throw new Error('CSRF token expired');
+      }
+      return resp;
+    });
   };
 
   // Clipboard that works on non-secure contexts too (Herd's *.test, etc.)

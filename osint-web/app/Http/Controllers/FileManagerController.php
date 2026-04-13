@@ -115,6 +115,10 @@ class FileManagerController extends Controller
         $parent = $this->parentOf($oldPath);
         $newPath = $parent === '/' ? '/' . $data['new_name'] : $parent . '/' . $data['new_name'];
 
+        if ($newPath !== $oldPath && (FileFolder::where('path', $newPath)->exists() || UploadedFile::where('folder', $newPath)->exists())) {
+            return response()->json(['ok' => false, 'error' => 'A folder with that name already exists'], 409);
+        }
+
         FileFolder::where('path', $oldPath)->update(['path' => $newPath]);
         FileFolder::where('path', 'LIKE', $oldPath . '/%')
             ->get()->each(fn ($f) => $f->update(['path' => $newPath . substr($f->path, strlen($oldPath))]));

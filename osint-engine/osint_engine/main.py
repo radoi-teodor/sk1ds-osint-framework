@@ -84,8 +84,7 @@ async def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "transforms": len(get_registry()),
-        "load_errors": LOAD_ERRORS,
-        "transforms_dir": str(settings.transforms_dir),
+        "generators": len(get_generator_registry()),
     }
 
 

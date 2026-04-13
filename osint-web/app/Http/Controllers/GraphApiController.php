@@ -84,7 +84,7 @@ class GraphApiController extends Controller
     {
         DB::transaction(function () use ($graph, $cyId) {
             $graph->edges()
-                ->where('source_cy_id', $cyId)->orWhere('target_cy_id', $cyId)
+                ->where(fn ($q) => $q->where('source_cy_id', $cyId)->orWhere('target_cy_id', $cyId))
                 ->delete();
             $graph->nodes()->where('cy_id', $cyId)->delete();
         });
