@@ -67,6 +67,33 @@ You'll be redirected to **`/setup`** to create your first admin account. After t
 To stop: `docker compose down` (data persists in Docker volumes).
 To stop and wipe data: `docker compose down -v`.
 
+### Updating to a new version
+
+Your data (database and uploaded files) is stored in Docker volumes and **will not be lost** during an update. Migrations run automatically on startup.
+
+**If using pre-built images (Option A):**
+
+```bash
+# Pull the latest images and recreate containers
+docker compose -f docker-compose.hub.yml pull
+docker compose -f docker-compose.hub.yml up -d
+```
+
+**If using build from source (Option B):**
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+You can also update individual services without restarting everything:
+
+```bash
+# Example: update only the engine
+docker compose -f docker-compose.hub.yml pull engine
+docker compose -f docker-compose.hub.yml up -d engine
+```
+
 ### Docker environment
 
 Customize by creating a `.env` file next to the compose file:
