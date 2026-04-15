@@ -55,6 +55,12 @@ services:
       RUN_MIGRATIONS: "true"
     volumes:
       - uploads:/app/storage/app/uploads
+    healthcheck:
+      test: ["CMD", "php", "artisan", "migrate:status"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     depends_on:
       mysql:
         condition: service_healthy
@@ -89,7 +95,7 @@ services:
       mysql:
         condition: service_healthy
       web:
-        condition: service_started
+        condition: service_healthy
     networks:
       - osint
 
