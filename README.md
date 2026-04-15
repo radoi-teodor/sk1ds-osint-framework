@@ -29,7 +29,7 @@ Download a single file and run — no build, no source code required:
 
 ```bash
 # Download the compose file
-curl -O https://raw.githubusercontent.com/radoi-teodor/osint-framework/main/docker-compose.hub.yml
+curl -O https://raw.githubusercontent.com/radoi-teodor/sk1ds-osint-framework/main/docker-compose.hub.yml
 
 # Start the platform
 docker compose -f docker-compose.hub.yml up -d
