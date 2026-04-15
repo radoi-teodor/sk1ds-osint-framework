@@ -42,8 +42,8 @@ Images pulled automatically from Docker Hub:
 ### Option B: Build from source
 
 ```bash
-git clone https://github.com/radoi-teodor/osint-framework.git
-cd osint-framework
+git clone https://github.com/radoi-teodor/sk1ds-osint-framework.git
+cd sk1ds-osint-framework
 docker compose up -d
 ```
 
